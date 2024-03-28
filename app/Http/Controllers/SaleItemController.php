@@ -19,7 +19,7 @@ class SaleItemController extends Controller
     }
     
     public function view(){
-        $saleItems = SalesList::all();
+        $saleItems = SalesList::orderBy('date', 'desc')->get();
         return view('sale-items.view', compact('saleItems'));
     }
     
