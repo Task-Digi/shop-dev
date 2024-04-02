@@ -1,4 +1,5 @@
 <?php
+
 use App\Http\Controllers\SaleItemController;
 use App\Http\Controllers\AuthLoginController;
 use App\Http\Controllers\CouponController;
@@ -19,22 +20,27 @@ use App\Http\Controllers\HomeController;
 // use \CompanyController;
 
 
-  
-    
-    Route::get('/view', [SaleItemController::class, 'view'])->name('saleitems.view');
-    Route::get('/93WwgVzcc9shQaxnd34c', [SaleItemController::class, 'create']);
-    Route::post('/home', [SaleItemController::class, 'store']);
-    
 
-    Route::get('/download-csv', 'CsvController@downloadCsv')->name('download.csv');
 
-    Route::get('/{id}/edit', [SaleItemController::class, 'edit']);
-    Route::put('/{id}', [SaleItemController::class, 'update']);
-    Route::delete('/{id}', [SaleItemController::class, 'destroy']);
+Route::get('/view', [SaleItemController::class, 'view'])->name('saleitems.view');
+Route::get('/93WwgVzcc9shQaxnd34c', [SaleItemController::class, 'create']);
+Route::post('/home', [SaleItemController::class, 'store']);
+
+
+Route::get('/download-csv', 'CsvController@downloadCsv')->name('download.csv');
+
+Route::get('/{id}/edit', [SaleItemController::class, 'edit']);
+Route::put('/{id}', [SaleItemController::class, 'update']);
+Route::delete('/{id}', [SaleItemController::class, 'destroy']);
 
 
 Route::get('/login', [New_LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthLoginController::class, 'login']);
+
+
+// piratheep routes 
+
+
 
 
 // Route::group(['as'=>'admin.','prefix' => 'admin','namespace'=>'Admin','middleware'=>['auth','admin']], function () {
