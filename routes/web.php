@@ -39,7 +39,7 @@ Route::post('/login', [AuthLoginController::class, 'login']);
 
 
 // piratheep routes 
-
+ Route::get('/get-customer-details', [CustomerController::class, 'getCustomerDetails'])->name('get_customer_details');
 
 
 
