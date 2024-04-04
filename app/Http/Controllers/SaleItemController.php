@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use App\SalesList;
 use Illuminate\Http\Request;
 
@@ -9,20 +10,21 @@ class SaleItemController extends Controller
     public function index()
     {
         // Fetch all sale items from the database
-        
+
         return view('sale-items.index');
     }
-    
+
     public function create()
     {
         return view('sale-items.create');
     }
-    
-    public function view(){
+
+    public function view()
+    {
         $saleItems = SalesList::orderBy('date', 'desc')->get();
         return view('sale-items.view', compact('saleItems'));
     }
-    
+
     public function store(Request $request)
     {
         // Validate the common input data
@@ -36,8 +38,8 @@ class SaleItemController extends Controller
         //     'productid' => 'required',
         //     'count' => 'required',
         // ]);
-    $existingOrder = SalesList::where('orderid', $request->input('orderid'))->exists();
-        
+        $existingOrder = SalesList::where('orderid', $request->input('orderid'))->exists();
+
         if ($existingOrder) {
             // Return with an error message if the orderId already exists
             return back()->withErrors(['order_id' => 'Order ID already exists. Please choose a different one.']);
@@ -56,13 +58,13 @@ class SaleItemController extends Controller
                     'count' => $request->input('count')[$key],
                 ]);
             }
-    
+
             // Redirect back to the previous page with a success message
             return back()->with('success', 'Sale items created successfully!');
         } catch (\Exception $e) {
             // Log the exception for debugging
             \Log::error($e);
-    
+
             // Return with an error message
             return back()->with('error', 'Error storing sale items. Please try again.');
         }
@@ -73,7 +75,7 @@ class SaleItemController extends Controller
         $saleItem = SalesList::find($id);
         return view('sale-items.edit', compact('saleItem'));
     }
-    
+
     public function update(Request $request, $id)
     {
         // Validate the input data
@@ -87,20 +89,33 @@ class SaleItemController extends Controller
             'orderid' => 'required',
             'count' => 'required',
         ]);
-    
+
         $saleItem = SalesList::find($id);
         $saleItem->update($request->all());
-    
+
         // Redirect to the view page after updating
         return redirect('/view')->with('success', 'Sale item updated successfully!');
     }
-    
+
     public function destroy($id)
     {
         $saleItem = SalesList::find($id);
         $saleItem->delete();
-    
+
         return redirect('/view')->with('success', 'Sale item deleted successfully!');
     }
 
+    public function validateOrderId(Request $request)
+    {
+        $orderid = $request->input('orderid');
+
+        // Check if the order ID already exists in the sale_list table
+        $existingOrder = SalesList::where('orderid', $orderid)->exists();
+
+        if ($existingOrder) {
+            return response()->json(['error' => 'Order ID already exists']);
+        }
+
+        return response()->json(['success' => 'Order ID is valid']);
+    }
 }

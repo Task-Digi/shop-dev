@@ -6,6 +6,7 @@ use App\Http\Controllers\CouponController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\Auth\New_LoginController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\CustomerController;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -40,6 +41,7 @@ Route::post('/login', [AuthLoginController::class, 'login']);
 
 // piratheep routes 
  Route::get('/get-customer-details', [CustomerController::class, 'getCustomerDetails'])->name('get_customer_details');
+ Route::get('/validate-order-id', [SaleItemController::class, 'validateOrderId'])->name('validate_order_id');
 
 
 

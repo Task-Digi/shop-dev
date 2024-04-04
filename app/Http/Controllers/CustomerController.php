@@ -9,6 +9,7 @@ class CustomerController extends Controller
 {
     public function getCustomerDetails(Request $request)
     {
+        
         $customer_id = $request->input('customer_id');
         $customer = Customer::where('customer_id', $customer_id)->first();
 
