@@ -6,6 +6,13 @@
         <!-- Include jQuery -->
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+        <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+            integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous">
+        </script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-ho+j7jyWK8fNQe+A12Hb8AhRq26LrZ/JpcUGGOn+Y7RsweNrtN/tE3MoK7ZeZDyx" crossorigin="anonymous">
+        </script>
     </head>
 
     <div class="container">
@@ -67,7 +74,8 @@
                     <div class="col-md-6">
                         <div class="form-group">
                             <label>Customer ID:</label>
-                            <input type="text" id="customerid" name="customerid" class="form-control">
+                            
+                            <input type="text" id="customerid" class="form-control">
                             <div id="customer-details">
                                 <!-- Customer details will be displayed here -->
                             </div>
@@ -92,6 +100,9 @@
                         <div class="col-4">
                             <label for="productid[]">Product ID:</label>
                             <input type="text" id="productid" name="productid[]" class="form-control">
+                            <div id="productid-alert">
+                                <!-- Customer details will be displayed here -->
+                            </div>
                         </div>
                         <div class="col-3">
                             <label for="count[]">Count:</label>
@@ -108,79 +119,85 @@
     </div>
 
     <script>
-        $(document).ready(function() {
-            $('#customerid').on('blur', function() {
-
-                var customerId = $(this).val();
-                console.log(customerId, "Keyup event triggered");
-                if (customerId != '') {
-                    $.ajax({
-                        url: "{{ route('get_customer_details') }}",
-                        method: 'GET',
-                        data: {
-                            customer_id: customerId
-                        },
-                        success: function(response) {
-                            if (response) {
-                                var customerDetailsHtml = '<p>Customer Name: ' + response
-                                    .customer_name + '</p>';
-                                $('#customer-details').html(customerDetailsHtml);
-                            }
+        $('#customerid').on('blur', function() {
+            var customerId = $(this).val();
+            console.log(customerId, "Keyup event triggered");
+            if (customerId != '') {
+                $('#customer-details').html('');
+                $.ajax({
+                    url: "{{ route('get_customer_details') }}",
+                    method: 'GET',
+                    data: {
+                        customer_id: customerId
+                    },
+                    success: function(response) {
+                        if (response && response.customer_name !== undefined) {
+                            var customerDetailsHtml =
+                                '<p class="alert alert-primary">Customer Name: ' + response
+                                .customer_name + '</p>';
+                            $('#customer-details').html(customerDetailsHtml);
                         }
-                    });
-                }
-            });
-            $('#orderid').on('blur', function() {
-
-                var orderid = $(this).val();
-                console.log(orderid, "Keyup event triggered orderid");
-                if (orderid != '') {
-                    $.ajax({
-                        url: "{{ route('validate_order_id') }}",
-                        method: 'GET',
-                        data: {
-                            orderid: orderid
-                        },
-                        success: function(response) {
-                            if (response) {
-                                if (response.error) {
-                                    var orderidalertHtml = '<p>' + response.error +
-                                        '</p>';
-                                    $('#orderid-alert').html(orderidalertHtml);
-                                } else if (response.success) {
-                                    // Handle success case if needed
-                                }
-                            }
-                        }
-                    });
-                }
-            });
-            $('#productid').on('blur', function() {
-
-                var productid = $(this).val();
-                console.log(productid, "Keyup event triggered orderid");
-                if (productid != '') {
-                    $.ajax({
-                        url: "{{ route('validate_order_id') }}",
-                        method: 'GET',
-                        data: {
-                            orderid: productid
-                        },
-                        success: function(response) {
-                            if (response) {
-                                if (response.error) {
-                                    var orderidalertHtml = '<p>' + response.error +
-                                        '</p>';
-                                    $('#productid-alert').html(orderidalertHtml);
-                                } else if (response.success) {
-                                    // Handle success case if needed
-                                }
-                            }
-                        }
-                    });
-                }
-            });
+                    }
+                });
+            }
         });
+
+        $('#orderid').on('blur', function() {
+            var orderid = $(this).val();
+            console.log(orderid, "Keyup event triggered orderid");
+            if (orderid != '') {
+                // Clear the previous order ID alert message
+                $('#orderid-alert').html('');
+
+                $.ajax({
+                    url: "{{ route('validate_order_id') }}",
+                    method: 'GET',
+                    data: {
+                        orderid: orderid
+                    },
+                    success: function(response) {
+                        if (response) {
+                            if (response.error) {
+                                var orderidalertHtml = '<p class="alert alert-danger">' +
+                                    response.error +
+                                    '</p>';
+                                $('#orderid-alert').html(orderidalertHtml);
+                            } else if (response.success) {
+                                // Handle success case if needed
+                            }
+                        }
+                    }
+                });
+            }
+        });
+
+        $('#productid').on('blur', function() {
+        var productid = $(this).val();
+        console.log(productid, "Keyup event triggered productid");
+        if (productid != '') {
+            // Clear the previous product name message
+            $('#productid-alert').html('');
+
+            $.ajax({
+                url: "{{ route('get-product-details') }}",
+                method: 'GET',
+                data: {
+                    product_id: productid
+                },
+                success: function(response) {
+                    if (response.product_name !==
+                        undefined) { // Check if product_name is defined
+                        var orderidalertHtml =
+                            '<p class="alert alert-danger">Product Name: ' + response
+                            .product_name + '</p>';
+                        $('#productid-alert').html(orderidalertHtml);
+                    }
+                }
+            });
+        }
+        });
+
+       
 
         document.addEventListener('DOMContentLoaded', function() {
             // Get the container where additional fields will be appended

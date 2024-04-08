@@ -118,4 +118,24 @@ class SaleItemController extends Controller
 
         return response()->json(['success' => 'Order ID is valid']);
     }
+    public function validateProductId(Request $request)
+    {
+        $productid = $request->input('productid');
+
+        // Check if the order ID already exists in the sale_list table
+        $existingOrder = SalesList::where('productid', $productid)->exists();
+
+        if ($existingOrder) {
+            return response()->json(['error' => 'productid  already exists']);
+        }
+
+        return response()->json(['success' => 'productid is valid']);
+    }
+    public function getSalesByDate(Request $request)
+    {
+        
+        $selectedDate = $request->selected_date;
+        $sales = SalesList::whereDate('date', $selectedDate)->get(); // Assuming your date column is named 'date'
+        return response()->json($sales);
+    }
 }

@@ -7,6 +7,8 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\Auth\New_LoginController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ReportController;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -20,8 +22,9 @@ use App\Http\Controllers\CustomerController;
 
 // use \CompanyController;
 
-
-
+// report routes
+Route::get('/report', [ReportController::class, 'index'])->name('report');
+Route::get('/get-sales-by-date', [SaleItemController::class, 'getSalesByDate'])->name('get_sales_by_date');
 
 Route::get('/view', [SaleItemController::class, 'view'])->name('saleitems.view');
 Route::get('/93WwgVzcc9shQaxnd34c', [SaleItemController::class, 'create']);
@@ -42,6 +45,8 @@ Route::post('/login', [AuthLoginController::class, 'login']);
 // piratheep routes 
  Route::get('/get-customer-details', [CustomerController::class, 'getCustomerDetails'])->name('get_customer_details');
  Route::get('/validate-order-id', [SaleItemController::class, 'validateOrderId'])->name('validate_order_id');
+ Route::get('/validate-product-id', [SaleItemController::class, 'validateProductId'])->name('validate_product_id');
+ Route::get('/get-product-details', [ProductController::class, 'getProductDetails'])->name('get-product-details');
 
 
 
