@@ -1,0 +1,15 @@
+/* public/css/styles.css */
+.additional-fields {
+    display: flex; /* Use flexbox to align items horizontally */
+    align-items: baseline; /* Align items along the baseline */
+    margin-right: 10px; /* Adjust margin as needed */
+    background-color: brown;
+}
+
+.additional-fields .form-group {
+    margin-bottom: 0; /* Remove margin bottom to avoid extra space */
+}
+
+.additional-fields .form-group:not(:last-child) {
+    margin-right: 10px; /* Add space between input fields */
+}

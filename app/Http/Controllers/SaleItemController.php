@@ -38,6 +38,7 @@ class SaleItemController extends Controller
         //     'productid' => 'required',
         //     'count' => 'required',
         // ]);
+        
         $existingOrder = SalesList::where('orderid', $request->input('orderid'))->exists();
 
         if ($existingOrder) {

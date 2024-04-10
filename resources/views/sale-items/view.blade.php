@@ -18,9 +18,9 @@
     </script>
 </head>
 <div style="padding: 15px">
-    <h1>Edit Sale Item</h1>
+    <h4>Edit Sale Item</h4>
 
-    <a href="/93WwgVzcc9shQaxnd34c" class="btn btn-secondary">Back to Dashboard</a>
+    <a href="/93WwgVzcc9shQaxnd34c" class="btn btn-secondary">Back to DataEntry</a>
     <a href="{{ route('report') }}" class="btn btn-primary">Report</a>
 
     <!-- Add CSV Download Link with Start and End Date Filter -->
