@@ -16,10 +16,10 @@
             gap: 2px;
         }
         .quantity-input {
-            width: 50px;
+            width: 35px;
             text-align: center;
             font-size: 12px;
-            padding: 1px 4px;
+            padding: 0px 2px;
             height: 24px;
         }
         .btn-quantity {
