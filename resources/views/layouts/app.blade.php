@@ -7,12 +7,17 @@
     <meta name="google-site-verification" content="idGSZ-IW8l_iuSFuZvTL2WihbyUKJ_-wVP51xapXHFM" />
 
     <title>SHOP</title>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
           integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"
           integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-slider/11.0.2/css/bootstrap-slider.css" integrity="sha512-SZgE3m1he0aEF3tIxxnz/3mXu/u/wlMNxQSnE0Cni9j/O8Gs+TjM9tm1NX34nRQ7GiLwUEzwuE3Wv2FLz2667w==" crossorigin="anonymous" />
     <link rel="stylesheet" href="{{asset('assets/css/Chart.min.css')}}">
+    <!-- Modern UI Styles -->
+    <link rel="stylesheet" href="{{asset('assets/css/modern-ui.css')}}?v=1">
     <link rel="stylesheet" href="{{asset('assets/css/template.css')}}?version=07092021&v3">
     <style>
         #ex1Slider .slider-selection {

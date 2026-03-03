@@ -29,6 +29,7 @@
         <form action="{{ route('download.csv') }}" method="GET" class="d-inline">
             <button type="submit" class="btn btn-success">Download CSV</button>
         </form>
+        <button id="clearFilters" type="button" class="btn btn-warning ml-2">Clear Filters</button>
 
         @if ($errors->any())
             <div class="alert alert-danger">
@@ -102,6 +103,7 @@
                     </table>
                 </div>
             </div>
+
         </div>
 
     </div>
@@ -133,51 +135,51 @@
             });
 
             // Custom date filter function
-            $.fn.dataTable.ext.search.push(
-                function(settings, data, dataIndex) {
-                    var minDate = $('#datepickerFilter').val();
-                    var date = data[0]; // Assuming date is in the first column
-
-                    // Convert date format to match the picker format
-                    var tableDate = moment(date, 'DD/MM/YYYY').format('YYYY-MM-DD');
-
-                    // Convert minDate format to YYYY-MM-DD
-                    var filterDate = moment(minDate).format('YYYY-MM-DD');
-
-                    if (
-                        (filterDate === '' || tableDate === filterDate)
-                    ) {
-                        return true;
-                    }
-                    return false;
-                }
-            );
+            // Note: Server-side filtering is now used for the Date column to handle historical data
+            // invalidating the need for client-side filtering on the limited 50 records.
 
             // Initialize Datepicker for Date column
-            var datepickerFilter = $('<input type="date" id="datepickerFilter" placeholder="Select a date">')
-                .appendTo($('#sale_items_table thead tr th').eq(0))
-                .on('change', function() {
-                    table.draw(); // Trigger DataTable to redraw with the new filter
-                });
+            var datepickerFilter = $('<input type="date" id="datepickerFilter" placeholder="Select a date" class="form-control" style="width: 100%;">')
+                .appendTo($('#sale_items_table thead tr th').eq(0));
+
+            // Pre-fill date from URL
+            var urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('date')) {
+                $('#datepickerFilter').val(urlParams.get('date'));
+            }
+
+            // Trigger server-side search on change
+            datepickerFilter.on('change', function() {
+                var val = $(this).val();
+                if (val) {
+                    // Reload with date parameter
+                    window.location.href = "{{ route('saleitems.view') }}?date=" + val;
+                } else {
+                    // Clear filter, reload to default view
+                    window.location.href = "{{ route('saleitems.view') }}";
+                }
+            });
 
             // Add dropdown filters to other header cells, excluding Date column
-            $('#sale_items_table thead tr th:not(:first, :nth-child(9), :nth-child(10))').each(function(colIdx) {
+            $('#sale_items_table thead tr th:not(:first, :nth-child(9), :nth-child(10))').each(function() {
                 var title = $(this).text();
                 // Create and append the dropdown
                 var dropdown = '<select><option value="">' + title + '</option></select>';
                 $(this).html(dropdown);
+
+                var column = table.column(this);
 
                 // Apply filtering on dropdown change
                 $('select', this).on('change', function() {
                     var val = $.fn.dataTable.util.escapeRegex(
                         $(this).val()
                     );
-                    table.column(colIdx + 1).search(val ? '^' + val + '$' : '', true, false).draw();
+                    column.search(val ? '^' + val + '$' : '', true, false).draw();
                 });
 
                 // Populate dropdown options with unique column values
                 var dropdownOptions = '<option value="">All</option>';
-                table.column(colIdx + 1).data().unique().sort().each(function(value) {
+                column.data().unique().sort().each(function(value) {
                     dropdownOptions += '<option value="' + value + '">' + value + '</option>';
                 });
                 $('select', this).append(dropdownOptions);
@@ -206,5 +208,29 @@
                 $('#searchResults').fadeOut();
             });
 
+            // Clear Filter Button Click Event
+            $('#clearFilters').click(function(e) {
+                e.preventDefault();
+                // If a server-side search is active (URL has 'search='), reload to the main dashboard to reset data
+                if (window.location.search.indexOf('search=') > -1) {
+                    window.location.href = "{{ route('saleitems.view') }}";
+                    return;
+                }
+
+                // Client-side reset for DataTables filters
+                // Clear Date Picker
+                $('#datepickerFilter').val('').trigger('change');
+                
+                // Clear Dropdowns
+                $('#sale_items_table thead select').val('');
+                
+                // Clear Search Input
+                $('#search').val('');
+                
+                // Reset DataTable Search and Columns
+                table.search('').columns().search('').draw();
+            });
+
         });
     </script>
+@endsection

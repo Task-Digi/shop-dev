@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\SalesList;
+use App\Models\SalesList;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use App\SaleData;
-use App\Product;
-use App\Customer;
+use App\Models\SaleData;
+use App\Models\Product;
+use App\Models\Customer;
+use Illuminate\Support\Facades\Log;
 
 class SaleItemController extends Controller
 {
@@ -107,7 +108,7 @@ class SaleItemController extends Controller
             return back()->with('success', 'Sale items created successfully!');
         } catch (\Exception $e) {
             // Log the exception for debugging
-            \Log::error($e);
+            Log::error($e);
 
             // Return with an error message
             return back()->with('error', 'Error storing sale items. Please try again.');
@@ -153,8 +154,17 @@ class SaleItemController extends Controller
         ]);
 
         // Update the sales_lists table
+        \Illuminate\Support\Facades\Log::info("Update called for ID: $id");
+        \Illuminate\Support\Facades\Log::info("Request Data: ", $request->all());
+
         $saleItem = SalesList::find($id);
+        if (!$saleItem) {
+            \Illuminate\Support\Facades\Log::error("SalesList NOT found for ID: $id");
+            return back()->with('error', 'Sale Item not found.');
+        }
+
         $saleItem->update($request->all());
+        \Illuminate\Support\Facades\Log::info("SalesList updated for ID: $id");
 
         // Fetch the related customer and product details
         $customer = Customer::where('customer_id', $request->customerid)->first();
@@ -162,6 +172,14 @@ class SaleItemController extends Controller
 
         // Update the sale_data table
         $saleData = SaleData::find($id);
+
+        if (!$saleData) {
+            \Illuminate\Support\Facades\Log::error("SaleData NOT found for ID: $id");
+            // Optionally, you might want to consider if you should error here or just log it. 
+            // Given the original code tried to find it, it's safer to report error.
+            return back()->with('error', 'Sale Data record not found.');
+        }
+
         $saleData->date = $request->date;
         $saleData->location = $request->location;
         $saleData->type = $request->type;
@@ -177,7 +195,8 @@ class SaleItemController extends Controller
         $saleData->updated_at = now();
 
         // Save the updated sale_data
-        $saleData->save();
+        $saved = $saleData->save();
+        \Illuminate\Support\Facades\Log::info("SaleData save result for ID: $id : " . ($saved ? 'true' : 'false'));
 
         // Redirect to the view page after updating
         return redirect('/Dashboard')->with('success', 'Sale item updated successfully!');
@@ -187,15 +206,15 @@ class SaleItemController extends Controller
     {
         $saleItem = SalesList::find($id);
         $saleData = SaleData::find($id);
-    
+
         if ($saleItem) {
             $saleItem->delete();
         }
-    
+
         if ($saleData) {
             $saleData->delete();
         }
-    
+
         return redirect('/Dashboard')->with('success', 'Sale item deleted successfully!');
     }
 
@@ -235,11 +254,27 @@ class SaleItemController extends Controller
 
     public function datasearch(Request $request)
     {
+        $search = $request->input('search');
         $query = DB::table('sale_data');
 
-        if ($request->has('search')) {
-            $search = $request->input('search');
-            $query->where(function ($query) use ($search) {
+        // Check for specific date filter (from column header)
+        if ($request->has('date')) {
+            $query->whereDate('date', $request->input('date'));
+        }
+
+        if ($search && $search != '') {
+
+            $searchDate = null;
+            try {
+                // Check for DD/MM/YYYY format
+                if (preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $search)) {
+                    $searchDate = \Carbon\Carbon::createFromFormat('d/m/Y', $search)->format('Y-m-d');
+                }
+            } catch (\Exception $e) {
+                // Ignore
+            }
+
+            $query->where(function ($query) use ($search, $searchDate) {
                 $query->where('date', 'like', "%{$search}%")
                     ->orWhere('location', 'like', "%{$search}%")
                     ->orWhere('payment', 'like', "%{$search}%")
@@ -249,9 +284,13 @@ class SaleItemController extends Controller
                     ->orWhere('customer_id', 'like', "%{$search}%")
                     ->orWhere('customer_name', 'like', "%{$search}%")
                     ->orWhere('product_name', 'like', "%{$search}%");
+
+                if ($searchDate) {
+                    $query->orWhere('date', 'like', "%{$searchDate}%");
+                }
             });
-        } else {
-            // Order by the date column (assuming you have a date column) and limit to latest 50 results
+        } elseif (!$request->has('date')) {
+            // Only limit to 50 if NO search and NO date filter are present
             $query->orderBy('date', 'desc')->limit(50);
         }
 

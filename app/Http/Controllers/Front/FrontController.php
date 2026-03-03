@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Front;
 
-use App\Access;
-use App\Analytic;
-use App\Code;
+use App\Models\Access;
+use App\Models\Analytic;
+use App\Models\Code;
 use App\Events\SendSurveyMail;
-use App\Respond;
-use App\Response;
+use App\Models\Respond;
+use App\Models\Response;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -28,16 +28,16 @@ class FrontController extends Controller
                 ->where('code', $access_code);
             $accessTemp = $access->first();
 
-            if(isset($accessTemp) && isset($accessTemp->from_date)) {
-//                $betweenDate = Carbon::createFromDate('Y-m-d', $accessTemp->from_date)->subDay(1);
+            if (isset($accessTemp) && isset($accessTemp->from_date)) {
+                //                $betweenDate = Carbon::createFromDate('Y-m-d', $accessTemp->from_date)->subDay(1);
                 $access = $access->where(function ($where) {
                     $where->whereNotNull('from_date');
                     $where->whereDate('from_date', '<=', Carbon::now()->format('Y-m-d'));
-//                    $where->whereNotBetween('from_date', [$betweenDate, Carbon::now()->format('Y-m-d')]);
+                    //                    $where->whereNotBetween('from_date', [$betweenDate, Carbon::now()->format('Y-m-d')]);
                 });
             }
-            if(isset($accessTemp->to_date)) {
-//                $betweenDate = Carbon::createFromDate('Y-m-d', $accessTemp->from_date)->subDay(1);
+            if (isset($accessTemp->to_date)) {
+                //                $betweenDate = Carbon::createFromDate('Y-m-d', $accessTemp->from_date)->subDay(1);
                 $access = $access->where(function ($where) {
                     $where->whereNotNull('to_date');
                     $where->whereDate('to_date', '>=', Carbon::now()->format('Y-m-d'));
@@ -56,8 +56,7 @@ class FrontController extends Controller
                 $access = null;
                 return view('front.front', compact('access', 'access_code'))->with('error', 'Not a Valid URL!');
             }
-        }
-        else {
+        } else {
             $access = null;
             return view('front.retail', compact('access_code'));
         }
@@ -66,7 +65,7 @@ class FrontController extends Controller
     public function checkCustomer(Request $request, $access_code)
     {
         $access_code = strtoupper($access_code);
-//        dd($request->input());
+        //        dd($request->input());
         if ($access_code === 'A8H7G') {
             $customer = strtoupper($request->customer);
             $location = ucfirst($request->location);
@@ -74,22 +73,21 @@ class FrontController extends Controller
             $request->session()->forget('respond');
             $request->session()->forget('location');
             $access = Access::where('Access_Active', 1)
-                            ->where('Access_Code', $customer)
-                            ->first();
-//            dd($access_code, $customer, $location, $access);
+                ->where('Access_Code', $customer)
+                ->first();
+            //            dd($access_code, $customer, $location, $access);
             if ($access) {
                 $request->session()->put('access', $access);
                 $request->session()->put('location', $location);
                 $request->session()->put('qCount', 'R');
-//                dd($request->latitude, $request->longitude, $request->input());
-                if(isset($request->latitude))
+                //                dd($request->latitude, $request->longitude, $request->input());
+                if (isset($request->latitude))
                     $request->session()->put('latitude', $request->latitude);
-                if(isset($request->longitude))
+                if (isset($request->longitude))
                     $request->session()->put('longitude', $request->longitude);
-//                dd($request->session()->get('access'), $request->session()->get('location'));
+                //                dd($request->session()->get('access'), $request->session()->get('location'));
                 return response()->json(['status' => true, 'redirectUrl' => route('front.question.page.one')]);
-            }
-            else {
+            } else {
                 return response()->json(['status' => false, 'redirectUrl' => route('front.home')]);
             }
         } else {
@@ -106,7 +104,7 @@ class FrontController extends Controller
 
             $select = config('settings.select')[$access->Access_Standard_ID];
             $pageLists = array_keys($select);
-//            dd($select, $pageLists);
+            //            dd($select, $pageLists);
 
             /* Get pages in an order */
             if (!Cache::has('prePage')) {
@@ -123,13 +121,12 @@ class FrontController extends Controller
                 Cache::put('prePage', $key, 60 * 60);
             }
 
-//            $page = $pageLists[array_rand ($pageLists , 1)];
+            //            $page = $pageLists[array_rand ($pageLists , 1)];
             $page = $pageLists[Cache::get('prePage')];
             $questionsList = [];
-            if($qCount === 'R') {
+            if ($qCount === 'R') {
                 $questionsList = $select[$page];
-            }
-            else {
+            } else {
                 foreach ($select as $sel)
                     $questionsList = array_merge($questionsList, $sel);
             }
@@ -158,7 +155,7 @@ class FrontController extends Controller
             foreach ($extraQueList as $list)
                 $questions_extra[$list] = config('settings.extra_questions')[$list];
 
-//            dd($questions_basic, $questions_css, $questions_extra);
+            //            dd($questions_basic, $questions_css, $questions_extra);
             return view('front.questions', compact('access', 'page', 'questions', 'questions_css', 'questions_basic', 'questions_extra'));
         } else {
             return redirect()->route('front.home')->with('error', 'This Access Code is not Available!');
@@ -201,9 +198,9 @@ class FrontController extends Controller
                 'Respond_Customer_ID' => $access->Access_Customer_ID,
             ];
             $cordinates = [];
-            if($request->session()->has('location'))
+            if ($request->session()->has('location'))
                 $respondData['Respond_Customer_Location'] = $request->session()->get('location');
-            if($request->session()->has('latitude') || $request->session()->has('longitude'))
+            if ($request->session()->has('latitude') || $request->session()->has('longitude'))
                 $respondData['Respond_Customer_Cordinates'] = json_encode([
                     'lat' => $request->session()->get('latitude'),
                     'lon' => $request->session()->get('longitude'),
@@ -230,7 +227,7 @@ class FrontController extends Controller
                     $createdResponse = Response::create($input);
                 }
                 Code::where('code_id', $access->code_id)->update(['count' => $access->count + 1]);
-//                event(new SendSurveyMail($createdRespond->Respond_ID));
+                //                event(new SendSurveyMail($createdRespond->Respond_ID));
                 return redirect()->route('front.question.page.two');
             } else {
                 return response()->json(['status' => 403, 'data' => ['message' => 'Sorry Something went wrong']]);

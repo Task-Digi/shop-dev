@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+
+
 use App\Http\Controllers\SaleItemController;
 use App\Http\Controllers\AuthLoginController;
 use App\Http\Controllers\CalendarController;
@@ -9,20 +11,19 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\OrderDeliveryController;
+use App\Http\Controllers\TimesheetController;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| contains the "web" middleware group. Now create something great!
-|
-*/
+Route::get('/', function () {
+    return view('welcome');
+});
+
+// Timesheet Routes
+Route::get('/timesheet', [TimesheetController::class, 'index'])->name('timesheet.index');
+Route::post('/timesheet/download', [TimesheetController::class, 'download'])->name('timesheet.download');
 
 // Authentication Routes
-Route::get('/login', [New_LoginController::class, 'showLoginForm'])->name('login');
+Route::get('/login', [New_LoginController::class, 'show'])->name('login');
 Route::post('/login', [AuthLoginController::class, 'login']);
 
 // Dashboard Routes
@@ -37,7 +38,9 @@ Route::get('/get-sale-items', [SaleItemController::class, 'getSaleItems'])->name
 Route::post('/autocomplete/search', [SaleItemController::class, 'autocompleteSearch'])->name('autocomplete.search');
 
 // Sale Items CRUD Routes
-Route::get('/93WwgVzcc9shQaxnd34c', [SaleItemController::class, 'create']);
+Route::get('/93WwgVzcc9shQaxnd34c', [SaleItemController::class, 'create'])->name('saleitems.create_raw');
+Route::get('/create', [SaleItemController::class, 'create'])->name('saleitems.create');
+Route::get('/sale-items', [SaleItemController::class, 'datasearch'])->name('saleitems.index');
 Route::post('/home', [SaleItemController::class, 'store']);
 Route::get('/date-get', [SaleItemController::class, 'getLastSubmissionDate']);
 Route::get('/{id}/edit', [SaleItemController::class, 'edit']);
@@ -45,7 +48,7 @@ Route::put('/{id}', [SaleItemController::class, 'update']);
 Route::delete('/{id}', [SaleItemController::class, 'destroy']);
 
 // CSV Download Route
-Route::get('/download-csv', 'CsvController@downloadCsv')->name('download.csv');
+Route::get('/download-csv', 'App\Http\Controllers\CsvController@downloadCsv')->name('download.csv');
 
 // Data Validation Routes
 Route::get('/get-customer-details', [CustomerController::class, 'getCustomerDetails'])->name('get_customer_details');
@@ -74,6 +77,7 @@ Route::post('/ict/update-quantity', [ReportController::class, 'updateQuantity'])
 Route::get('/get-sales-by-date', [SaleItemController::class, 'getSalesByDate'])->name('get_sales_by_date');
 Route::get('/get-sales-data-report', [ReportController::class, 'getSalesData'])->name('get_sales_Data_Report');
 Route::get('/customers/{date}', [ReportController::class, 'getCustomersByDate']);
+Route::get('/customer/products-by-date', [ReportController::class, 'customerProductsByDate']);
 Route::get('/customer/details', [ReportController::class, 'getCustomerData']);
 Route::get('/CustomerReport/details', [ReportController::class, 'getCustomerReportData']);
 Route::get('/product/details', [ReportController::class, 'getProductData']);
@@ -86,80 +90,23 @@ Route::post('/update-ks-status', [ReportController::class, 'updateKsStatus'])->n
 Route::post('/update-crm-id', [ReportController::class, 'updateCrmId']);
 Route::post('/get-latest-crm-id', [ReportController::class, 'getLatestCrmId']);
 
-// Test Route
-Route::get('test', function () {
-    Artisan::call('cache:clear');
-    return 'Cache cleared successfully';
+// Order Delivery Routes
+Route::prefix('order-delivery')->group(function () {
+    Route::get('/', [OrderDeliveryController::class, 'index'])->name('order-delivery.index');
+    Route::get('/mobile-global', [OrderDeliveryController::class, 'mobileGlobal'])->name('order-delivery.mobile-global');
+    Route::post('/import', [OrderDeliveryController::class, 'import'])->name('order-delivery.import');
+    Route::get('/{orderId}', [OrderDeliveryController::class, 'show'])->name('order-delivery.show');
+    Route::post('/scan', [OrderDeliveryController::class, 'scan'])->name('order-delivery.scan');
+    Route::post('/view-product', [OrderDeliveryController::class, 'viewProduct'])->name('order-delivery.view-product');
+    Route::post('/update-units', [OrderDeliveryController::class, 'updateUnits'])->name('order-delivery.update-units');
+    Route::post('/update-exact', [OrderDeliveryController::class, 'updateUnitsExact'])->name('order-delivery.update-exact');
+    Route::post('/match-order', [OrderDeliveryController::class, 'updateUnitsToMatchOrder'])->name('order-delivery.match-order');
+    Route::post('/update-price', [OrderDeliveryController::class, 'updateProductPrice'])->name('order-delivery.update-price');
+    Route::post('/delete-scan', [OrderDeliveryController::class, 'deleteScan'])->name('order-delivery.delete-scan');
+    Route::post('/close', [OrderDeliveryController::class, 'closeOrder'])->name('order-delivery.close');
+    Route::get('/{orderId}/mobile', [OrderDeliveryController::class, 'mobile'])->name('order-delivery.mobile');
+    Route::get('/{orderId}/sync', [OrderDeliveryController::class, 'sync'])->name('order-delivery.sync');
+    Route::delete('/{orderId}', [OrderDeliveryController::class, 'deleteOrder'])->name('order-delivery.delete');
 });
 
-// Fallback Route for 404 errors
-Route::fallback(function () {
-    return view('errors.404');
-});
-
-// =============================================================================
-// COMMENTED OUT ROUTES (For Reference - Keep if you need them later)
-// =============================================================================
-
-// Route::group(['as'=>'admin.','prefix' => 'admin','namespace'=>'Admin','middleware'=>['auth','admin']], function () {
-// 		Route::get('dashboard', 'DashboardController@index')->name('dashboard');
-// });
-
-// Route::group(['as'=>'user.','prefix' => 'user','namespace'=>'User','middleware'=>['auth','user']], function () {
-// 		Route::get('dashboard', 'DashboardController@index')->name('dashboard');
-// });
-
-// Calendar route (commented out)
-// Route::get('/calendar', [CalendarController::class, 'showCalendar'])->name('calendar');
-
-// Company resource route (commented out)
-// Route::resource('companies', CompanyController::class);
-
-// Welcome route (commented out)
-// Route::get('/', function () {
-//     return view('welcome');
-// });
-
-// Migration route (commented out)
-// Route::get('/migration/{filter}', 'Controller@migration')->name('migration');
-
-// Front dashboard routes (commented out)
-// Route::get('/dashboard/{user}/{standard}', 'Front\DashboardController@dashboard')->name('front.dashboard');
-// Route::get('/dashboard-2/{user}/{standard}', 'Front\DashboardController@dashboard2')->name('front.dashboard.two');
-// Route::get('/dashboard-3/{user}/{standard}', 'Front\DashboardController@dashboard3')->name('front.dashboard.three');
-// Route::get('/dashboard-4/{user}/{standard}', 'Front\DashboardController@dashboard4')->name('front.dashboard.four');
-
-// Route::get('/dashboard-1-multiple/{user}/{standard}', 'Front\DashboardMultipleController@dashboard')->name('front.dashboard.multiple.one');
-// Route::get('/dashboard-2-multiple/{user}/{standard}', 'Front\DashboardMultipleController@dashboard2')->name('front.dashboard.multiple.two');
-// Route::get('/dashboard-3-multiple/{user}/{standard}', 'Front\DashboardMultipleController@dashboard3')->name('front.dashboard.multiple.three');
-// Route::get('/dashboard-4-multiple/{user}/{standard}', 'Front\DashboardMultipleController@dashboard4')->name('front.dashboard.multiple.four');
-
-// Front question routes (commented out)
-// Route::get('/questions', 'Front\FrontController@questions')->name('front.question.page.one');
-// Route::post('/questions', 'Front\FrontController@saveAnswerMandatory');
-// Route::get('/questions-final', 'Front\FrontController@otherQuestions')->name('front.question.page.two');
-// Route::post('/questions-final', 'Front\FrontController@saveAllAnswer');
-// Route::get('/thanks', 'Front\FrontController@thanks')->name('front.question.page.three');
-
-// Front project routes (commented out)
-// Route::get('/project/{access_code}', 'Front\FrontController@index')->name('front.retail.project');
-// Route::get('/project1/{access_code}', 'Front\FrontController@index')->name('front.retail.project1');
-// Route::get('/routine/A8H7G', 'Front\FrontController@retailRoutine')->name('front.retail.routine');
-// Route::get('/information/A8H7G', 'Front\FrontController@RetailInformation')->name('front.retail.information');
-// Route::get('/survey/{id}', 'Front\FrontController@surveyDetails')->name('front.survey.details');
-// Route::get('/{access_code?}', 'Front\FrontController@index')->name('front.home');
-// Route::post('/{access_code?}', 'Front\FrontController@checkCustomer');
-
-// NPS update route (commented out)
-// Route::get('que-update/change-nps', 'Front\DashboardController@changeNPS');
-
-// Auth routes (commented out - using custom login above)
-// Auth::routes();
-// Route::get('/home', 'HomeController@index')->name('home');
-
-// Alternative login route (commented out)
-// Route::get('/login_2', [New_LoginController::class, 'show'])->name('login_2');
-
-// Admin routes (commented out)
-// Route::get('/admin', 'AdminController@index');
-// Route::get('/superadmin', 'SuperAdminController@index');
+Route::get('/home', [HomeController::class, 'index'])->name('home');

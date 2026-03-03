@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Customer;
+use App\Models\Customer;
 
 class CustomerController extends Controller
 {
@@ -22,7 +22,7 @@ class CustomerController extends Controller
             // If no customer is found, create a new customer with the provided customer_id and customer_name "newcustomer"
             $newCustomer = Customer::create([
                 'customer_id' => $customer_id,
-                'customer_name' => 'customer_'.$customer_id,
+                'customer_name' => 'customer_' . $customer_id,
             ]);
 
             // Return the newly created customer details as JSON response

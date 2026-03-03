@@ -1,2 +1,0 @@
-[19-Dec-2023 07:28:21 UTC] PHP Fatal error:  Cannot declare class App\Role because the name is already in use in /home/portu/public_html/livesites/subdomains/shop.dev.digifront.biz/app/Role.php on line 8
-[19-Dec-2023 07:44:48 UTC] PHP Fatal error:  Cannot use App\User as User because the name is already in use in /home/portu/public_html/livesites/subdomains/shop.dev.digifront.biz/database/seeds/UsersTableSeeder.php on line 7

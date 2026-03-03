@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Front;
 
-use App\Respond;
-use App\Response;
+use App\Models\Respond;
+use App\Models\Response;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
@@ -24,7 +24,7 @@ class DashboardMultipleController extends Controller
 
     function __construct(Request $request)
     {
-        if(isset($request->user) && $request->user == 'høyskolen-kristiania')
+        if (isset($request->user) && $request->user == 'høyskolen-kristiania')
             $this->user = array(500106, 500107, 500108, 500109, 500110);
         $this->userEncode = $request->user;
         $this->standard['id'] = (array_key_exists($request->standard, config('settings.standardsSeo'))) ? config('settings.standardsSeo')[$request->standard] : null;
@@ -42,7 +42,7 @@ class DashboardMultipleController extends Controller
 
         $extraQue = [];
         foreach (config('settings.select_extra_question')[$standard['id']] as $extra)
-            $extraQue = array_unique (array_merge ($extraQue, $extra));
+            $extraQue = array_unique(array_merge($extraQue, $extra));
 
         $companies = $this->customerName;
         if (!empty($user) && $standard['id'] !== null) {
@@ -54,7 +54,7 @@ class DashboardMultipleController extends Controller
             $endOfYear = Carbon::now()->endOfYear()->endOfYear()->format('Y-m-d');
 
             $data['noOfResponse']['week'] = Respond::select('COUNT(Respond_ID)')
-                ->whereExists(function ($query) use($standard) {
+                ->whereExists(function ($query) use ($standard) {
                     $query->select(DB::raw(1))
                         ->from('respons')
                         ->whereColumn('respond.Respond_ID', 'respons.Respons_Respond_ID')
@@ -65,7 +65,7 @@ class DashboardMultipleController extends Controller
                 ->whereDate('created_at', '<=', $endOfWeek)
                 ->count();
             $data['noOfResponse']['month'] = Respond::select('COUNT(Respond_ID)')
-                ->whereExists(function ($query) use($standard) {
+                ->whereExists(function ($query) use ($standard) {
                     $query->select(DB::raw(1))
                         ->from('respons')
                         ->whereColumn('respond.Respond_ID', 'respons.Respons_Respond_ID')
@@ -76,7 +76,7 @@ class DashboardMultipleController extends Controller
                 ->whereDate('created_at', '<=', $endOfMonth)
                 ->count();
             $data['noOfResponse']['year'] = Respond::select('COUNT(Respond_ID)')
-                ->whereExists(function ($query) use($standard) {
+                ->whereExists(function ($query) use ($standard) {
                     $query->select(DB::raw(1))
                         ->from('respons')
                         ->whereColumn('respond.Respond_ID', 'respons.Respons_Respond_ID')
@@ -107,7 +107,7 @@ class DashboardMultipleController extends Controller
             /*Customer Suggestion Score Calculation Start*/
             $monthStrartCSS = Carbon::now()->startOfMonth()->subMonth(5);
             $monthEndCSS = $monthStrartCSS->copy()->endOfMonth();
-//            $periodStartCSS = $monthStrartCSS->copy();
+            //            $periodStartCSS = $monthStrartCSS->copy();
             for ($i = 1; $i <= 6; $i++) {
                 $data['cssCount']['ans'][$monthStrartCSS->copy()->format('M')] = Response::select(DB::raw('COUNT(Respons_Question_Answer) as total'))
                     ->whereDate('created_at', '>=', $monthStrartCSS->format('Y-m-d H:i:s'))
@@ -130,8 +130,8 @@ class DashboardMultipleController extends Controller
             }
 
             $data['cssCount']['ans']['total'] = Response::select(DB::raw('COUNT(Respons_Question_Answer) as total'))
-//                ->whereDate('created_at', '>=', $periodStartCSS->format('Y-m-d H:i:s'))
-//                ->whereDate('created_at', '<=', $monthEndCSS->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '>=', $periodStartCSS->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '<=', $monthEndCSS->format('Y-m-d H:i:s'))
                 ->where('Questions_Standard_ID', $standard['id'])
                 ->whereIn('Respons_Question_ID', $cssQue)
                 ->where('Respons_Question_Answer', 1)
@@ -139,13 +139,13 @@ class DashboardMultipleController extends Controller
                 ->first()->toArray();
 
             $data['cssCount']['que']['total'] = Response::select(DB::raw('COUNT(Respons_Question_Answer) as total'))
-//                ->whereDate('created_at', '>=', $periodStartCSS->format('Y-m-d H:i:s'))
-//                ->whereDate('created_at', '<=', $monthEndCSS->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '>=', $periodStartCSS->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '<=', $monthEndCSS->format('Y-m-d H:i:s'))
                 ->whereIn('Respons_Question_ID', $cssQue)
                 ->where('Questions_Standard_ID', $standard['id'])
                 ->whereIn('Respons_Customer_ID', $user)
                 ->first()->toArray();
-//            dd($data['cssCount'], $standard, $user, $cssQue);
+            //            dd($data['cssCount'], $standard, $user, $cssQue);
             /*Customer Suggestion Score (CSS) Calculation End*/
 
             $data['responses']['responsesMax'] = 0;
@@ -177,10 +177,10 @@ class DashboardMultipleController extends Controller
                     ->groupBy(['Respons_Question_ID', 'Respons_Question_Answer'])
                     ->toArray();
 
-                if(!empty($data['basicQuesCount'][$monthStrart->copy()->format('M')]))
+                if (!empty($data['basicQuesCount'][$monthStrart->copy()->format('M')]))
                     $basicQuesCountEmpty = false;
 
-                if(!empty($data['extraQuesCount'][$monthStrart->copy()->format('M')]))
+                if (!empty($data['extraQuesCount'][$monthStrart->copy()->format('M')]))
                     $extraQuesCountEmpty = false;
 
                 $data['basicQuesMonthTotalCount'][$monthStrart->copy()->format('M')] = Response::select(DB::raw('Respons_Question_ID, Count(Respons_Question_ID) as Que_Count'))
@@ -232,7 +232,7 @@ class DashboardMultipleController extends Controller
             $data['responses']['count_labels'] = [];
             $i = $data['responses']['responsesMax'] / 10;
             $count = 0;
-            if($data['responses']['responsesMax'] !== 0) {
+            if ($data['responses']['responsesMax'] !== 0) {
                 while ($count <= $data['responses']['responsesMax']) {
                     $data['responses']['count_labels'][] = $count;
                     $count += $i;
@@ -240,8 +240,8 @@ class DashboardMultipleController extends Controller
             }
 
             $data['basicQuesAnsTotalCount']['Total'] = Response::select(DB::raw('Respons_Question_ID, Respons_Question_Answer, Count(Respons_Question_Answer) as Ans_Count'))
-//                ->whereDate('created_at', '>=', $monthStrart->copy()->addMonth()->format('Y-m-d H:i:s'))
-//                ->whereDate('created_at', '<=', $periodStart->copy()->endOfMonth()->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '>=', $monthStrart->copy()->addMonth()->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '<=', $periodStart->copy()->endOfMonth()->format('Y-m-d H:i:s'))
                 ->whereIn('Respons_Question_ID', $basicQue)
                 ->where('Questions_Standard_ID', $standard['id'])
                 ->whereIn('Respons_Customer_ID', $user)
@@ -252,8 +252,8 @@ class DashboardMultipleController extends Controller
                 ->toArray();
 
             $data['extraQuesAnsTotalCount']['Total'] = Response::select(DB::raw('Respons_Question_ID, Respons_Question_Answer, Count(Respons_Question_Answer) as Ans_Count'))
-//                ->whereDate('created_at', '>=', $monthStrart->copy()->addMonth()->format('Y-m-d H:i:s'))
-//                ->whereDate('created_at', '<=', $periodStart->copy()->endOfMonth()->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '>=', $monthStrart->copy()->addMonth()->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '<=', $periodStart->copy()->endOfMonth()->format('Y-m-d H:i:s'))
                 ->whereIn('Respons_Question_ID', $extraQue)
                 ->where('Questions_Standard_ID', $standard['id'])
                 ->whereIn('Respons_Customer_ID', $user)
@@ -264,8 +264,8 @@ class DashboardMultipleController extends Controller
                 ->toArray();
 
             $data['basicQuesTotalCount']['Total'] = Response::select(DB::raw('Respons_Question_ID, Count(Respons_Question_ID) as Que_Count'))
-//                ->whereDate('created_at', '>=', $monthStrart->copy()->addMonth()->format('Y-m-d H:i:s'))
-//                ->whereDate('created_at', '<=', $periodStart->copy()->endOfMonth()->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '>=', $monthStrart->copy()->addMonth()->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '<=', $periodStart->copy()->endOfMonth()->format('Y-m-d H:i:s'))
                 ->whereIn('Respons_Question_ID', $basicQue)
                 ->where('Questions_Standard_ID', $standard['id'])
                 ->whereIn('Respons_Customer_ID', $user)
@@ -276,8 +276,8 @@ class DashboardMultipleController extends Controller
                 ->toArray();
 
             $data['extraQuesTotalCount']['Total'] = Response::select(DB::raw('Respons_Question_ID, Count(Respons_Question_ID) as Que_Count'))
-//                ->whereDate('created_at', '>=', $monthStrart->copy()->addMonth()->format('Y-m-d H:i:s'))
-//                ->whereDate('created_at', '<=', $periodStart->copy()->endOfMonth()->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '>=', $monthStrart->copy()->addMonth()->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '<=', $periodStart->copy()->endOfMonth()->format('Y-m-d H:i:s'))
                 ->whereIn('Respons_Question_ID', $extraQue)
                 ->where('Questions_Standard_ID', $standard['id'])
                 ->whereIn('Respons_Customer_ID', $user)
@@ -286,10 +286,9 @@ class DashboardMultipleController extends Controller
                 ->get()
                 ->groupBy(['Respons_Question_ID'])
                 ->toArray();
-//            dd($data);
+            //            dd($data);
             return view('front.dashboard', compact('data', 'userEncode', 'user', 'basicQuesCountEmpty', 'extraQuesCountEmpty', 'companies', 'standard'));
-        }
-        else abort(404);
+        } else abort(404);
     }
 
 
@@ -341,8 +340,8 @@ class DashboardMultipleController extends Controller
             }
 
             $data['standardQuesAnsTotalCount']['Total'] = Response::select(DB::raw('Respons_Question_ID, Respons_Question_Answer, Count(Respons_Question_Answer) as Ans_Count'))
-//                ->whereDate('created_at', '>=', $monthStrart->copy()->addMonth()->format('Y-m-d H:i:s'))
-//                ->whereDate('created_at', '<=', $periodStart->copy()->endOfMonth()->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '>=', $monthStrart->copy()->addMonth()->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '<=', $periodStart->copy()->endOfMonth()->format('Y-m-d H:i:s'))
                 ->whereIn('Respons_Question_ID', $queArray)
                 ->whereIn('Respons_Customer_ID', $user)
                 ->where('Questions_Standard_ID', $standard['id'])
@@ -353,8 +352,8 @@ class DashboardMultipleController extends Controller
                 ->toArray();
 
             $data['standardQuesTotalCount']['Total'] = Response::select(DB::raw('Respons_Question_ID, Count(Respons_Question_ID) as Que_Count'))
-//                ->whereDate('created_at', '>=', $monthStrart->copy()->addMonth()->format('Y-m-d H:i:s'))
-//                ->whereDate('created_at', '<=', $periodStart->copy()->endOfMonth()->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '>=', $monthStrart->copy()->addMonth()->format('Y-m-d H:i:s'))
+                //                ->whereDate('created_at', '<=', $periodStart->copy()->endOfMonth()->format('Y-m-d H:i:s'))
                 ->whereIn('Respons_Question_ID', $queArray)
                 ->whereIn('Respons_Customer_ID', $user)
                 ->where('Questions_Standard_ID', $standard['id'])
@@ -364,10 +363,9 @@ class DashboardMultipleController extends Controller
                 ->groupBy(['Respons_Question_ID'])
                 ->toArray();
 
-//        dd($data);
+            //        dd($data);
             return view('front.dashboard2', compact('data', 'user', 'userEncode', 'companies', 'standard'));
-        }
-        else abort(404);
+        } else abort(404);
     }
 
 
@@ -391,10 +389,9 @@ class DashboardMultipleController extends Controller
                 ->where('Respond_OtherInfo', '!=', '')
                 ->orderBy('respond.created_at', 'DESC')
                 ->paginate(50);
-//        dd($data);
+            //        dd($data);
             return view('front.dashboard3', compact('data', 'userEncode', 'user', 'companies', 'standard'));
-        }
-        else abort(404);
+        } else abort(404);
     }
 
 
@@ -423,9 +420,8 @@ class DashboardMultipleController extends Controller
                 ->groupBy(['Respons_Question_ID', 'Respons_Question_Answer'])
                 ->toArray();
 
-//        dd($data);
+            //        dd($data);
             return view('front.dashboard4', compact('data', 'user', 'userEncode', 'companies', 'standard'));
-        }
-        else abort(404);
+        } else abort(404);
     }
 }

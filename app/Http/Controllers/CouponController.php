@@ -1,10 +1,11 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use App\Http\Controllers\Auth;
 
-use App\Coupon;
-use App\customer;
+use App\Models\Coupon;
+use App\Models\Customer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,7 @@ class CouponController extends Controller
     {
         return view('coupon/login');
     }
-    
+
     public function login(Request $request)
     {
         $password = $request->input('password');
@@ -25,86 +26,86 @@ class CouponController extends Controller
 
         if ($customer) {
             // Password is correct, you can proceed with the login logic
-           return view('coupon/create');
+            return view('coupon/create');
         } else {
             // Invalid credentials
             return view('coupon/login');
         }
     }
-    
+
     public function showForm()
     {
         return view('coupon/enterMobile');
     }
-    
+
     public function showCreateView()
     {
-        $coupons = Coupon::all(); 
+        $coupons = Coupon::all();
 
         return view('coupon.create', compact('coupons'));
     }
 
-//     public function store(Request $request)
-//     {
-//         // Validation
-//         $request->validate([
-//         'mobile_nr' => 'required',
-//         'voucher' => 'required',
-//         'end_date' => 'required|date',
-//         ]);
+    //     public function store(Request $request)
+    //     {
+    //         // Validation
+    //         $request->validate([
+    //         'mobile_nr' => 'required',
+    //         'voucher' => 'required',
+    //         'end_date' => 'required|date',
+    //         ]);
 
 
-//         foreach ($vouchers as $voucher) {
-//             Coupon::create([
-//                 'mobile_nr' => $request->input('mobile_nr'),
-//                 'voucher' => $voucher,
-//                 'end_date' => $request->input('end_date'),
-//             ]);
-//         }
-// // dd ($request->input('mobile_nr'));
-//         return redirect()->route('coupons.couponList')->with('success', 'Coupon created successfully');
-//     }
+    //         foreach ($vouchers as $voucher) {
+    //             Coupon::create([
+    //                 'mobile_nr' => $request->input('mobile_nr'),
+    //                 'voucher' => $voucher,
+    //                 'end_date' => $request->input('end_date'),
+    //             ]);
+    //         }
+    // // dd ($request->input('mobile_nr'));
+    //         return redirect()->route('coupons.couponList')->with('success', 'Coupon created successfully');
+    //     }
 
     public function store(Request $request)
-        {
-            // Validation
-            $request->validate([
-                'mobile_nr' => 'required',
-            ]);
-        
-            $mobileNumber = $request->input('mobile_nr');
-        
-            for ($i = 1; $i <= 5; $i++) {
-                // Check if the checkbox for the current voucher is checked
-                if ($request->has("voucher$i")) {
-                    // Check if the same coupon already exists
-                    $existingCoupon = Coupon::where([
+    {
+        // Validation
+        $request->validate([
+            'mobile_nr' => 'required',
+        ]);
+
+        $mobileNumber = $request->input('mobile_nr');
+
+        for ($i = 1; $i <= 5; $i++) {
+            // Check if the checkbox for the current voucher is checked
+            if ($request->has("voucher$i")) {
+                // Check if the same coupon already exists
+                $existingCoupon = Coupon::where([
+                    'mobile_nr' => $mobileNumber,
+                    'voucher' => "$i",
+                    'end_date' => $request->input("end_date$i"),
+                ])->first();
+
+                if (!$existingCoupon) {
+                    // Store the data in the database or perform any other actions
+                    Coupon::create([
                         'mobile_nr' => $mobileNumber,
                         'voucher' => "$i",
                         'end_date' => $request->input("end_date$i"),
-                    ])->first();
-        
-                    if (!$existingCoupon) {
-                        // Store the data in the database or perform any other actions
-                        Coupon::create([
-                            'mobile_nr' => $mobileNumber,
-                            'voucher' => "$i",
-                            'end_date' => $request->input("end_date$i"),
-                        ]);
-                    }
+                    ]);
                 }
             }
+        }
         return redirect()->route('coupons.create')->with('success', 'Coupons created successfully');
     }
-    
+
     public function checkMobileNumber($mobileNumber)
     {
         // Fetch the coupons associated with the mobile number
         $coupons = Coupon::where('mobile_nr', $mobileNumber)->get();
-    
+
         // Check if the mobile number exists and has associated coupons
         $exists = $coupons->isNotEmpty();
-    
+
         // Generate HTML content for the details
         $details = '';
         if ($exists) {
@@ -119,7 +120,7 @@ class CouponController extends Controller
             $details .= '</tr>';
             $details .= '</thead>';
             $details .= '<tbody>';
-    
+
             foreach ($coupons as $coupon) {
                 $details .= '<tr>';
                 $details .= '<td>' . $coupon->mobile_nr . '</td>';
@@ -136,11 +137,11 @@ class CouponController extends Controller
                 $details .= '</td>';
                 $details .= '</tr>';
             }
-    
+
             $details .= '</tbody>';
             $details .= '</table>';
         }
-    
+
         return response()->json(['exists' => $exists, 'details' => $details]);
     }
 
@@ -148,7 +149,7 @@ class CouponController extends Controller
     {
         $mobileNumber = $request->input('mobile_nr');
         $existingCoupons = Coupon::where('mobile_nr', $mobileNumber)->pluck('voucher')->toArray();
-    
+
         return response()->json($existingCoupons);
     }
 
@@ -156,43 +157,43 @@ class CouponController extends Controller
     {
         $mobileNumber = $request->input('mobile_nr');
         $user = Coupon::where('mobile_nr', $mobileNumber)->first();
-    
+
         if ($user) {
             $coupons = Coupon::where('mobile_nr', $mobileNumber)->get();
             return view('coupon.showCoupons', compact('mobileNumber', 'coupons'));
         } else {
             // Create new coupons for the entered mobile number
             $this->createNewCoupons($mobileNumber);
-    
+
             // Fetch the newly created coupons
             $coupons = Coupon::where('mobile_nr', $mobileNumber)->get();
-    
+
             return view('coupon.showCoupons', compact('mobileNumber', 'coupons'));
         }
     }
 
     public function showCouponList()
     {
-        $coupons = Coupon::all(); 
-    
+        $coupons = Coupon::all();
+
         return view('coupon.couponList', compact('coupons'));
     }
-    
+
     // public function edit($id)
     // {
     //     $coupon = Coupon::find($id);
     //     $coupons = Coupon::where('mobile_nr', $coupon->mobile_nr)->get();
-    
+
     //     return view('coupon.edit', ['coupon' => $coupon, 'coupons' => $coupons]);
     // }
-    
+
     public function edit($id)
     {
         $coupon = Coupon::find($id);
-    
+
         // Fetch associated coupons along with their end_date values
         $coupons = Coupon::where('mobile_nr', $coupon->mobile_nr)->get();
-    
+
         return view('coupon.edit', ['coupon' => $coupon, 'coupons' => $coupons]);
     }
 
@@ -246,13 +247,13 @@ class CouponController extends Controller
         return Redirect::route('coupons.couponList')->with('success', 'Coupons updated successfully.');
     }
 
-     public function destroy($id)
+    public function destroy($id)
     {
         // Log a message to see if the method is being called
         \Log::info("Destroy method called for coupon ID: $id");
-    
+
         $coupon = Coupon::find($id);
-    
+
         if ($coupon) {
             $coupon->delete();
             // Log a success message
@@ -269,27 +270,27 @@ class CouponController extends Controller
     {
         $mobileNumber = $request->input('mobile_nr');
         $user = Coupon::where('mobile_nr', $mobileNumber)->first();
-    
+
         if ($user) {
             $coupons = Coupon::where('mobile_nr', $mobileNumber)->get();
             return view('coupon/showCoupons', compact('mobileNumber', 'coupons'));
         } else {
             // Create new coupons for the entered mobile number
             $this->createNewCoupons($mobileNumber);
-    
+
             // Fetch the newly created coupons
             $coupons = Coupon::where('mobile_nr', $mobileNumber)->get();
-            
+
             return view('coupon/showCoupons', compact('mobileNumber', 'coupons'));
         }
     }
-    
+
     //create the new mobile number user with coupon id 3,4,5
     private function createNewCoupons($mobileNumber)
     {
         // Assuming the coupon numbers are 3, 4, 5
         $couponNumbers = [3, 4, 5];
-    
+
         foreach ($couponNumbers as $couponNumber) {
             Coupon::create([
                 'mobile_nr' => $mobileNumber,
@@ -298,7 +299,7 @@ class CouponController extends Controller
                 'used' => 0, // Default value for the 'used' field
             ]);
         }
-    } 
+    }
 
     public function markAsUsed(Request $request)
     {
@@ -309,7 +310,7 @@ class CouponController extends Controller
 
         return response()->json(['message' => 'Coupon marked as used']);
     }
-    
+
     public function logout()
     {
         \Auth::logout();

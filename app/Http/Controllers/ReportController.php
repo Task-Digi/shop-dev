@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\SalesList;
-use App\ICT;
-use App\product;
+use App\Models\SalesList;
+use App\Models\ICT;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -87,7 +87,7 @@ class ReportController extends Controller
             $location = $request->input('location');
             $customerId = $request->input('customer_id');
             $days = $request->input('days');
-            
+
             // Prepare the SQL query
             $query = "
                 SELECT
@@ -107,7 +107,7 @@ class ReportController extends Controller
                     location = ?
                     AND customer_id = ?
             ";
-            
+
             // Add the date filtering condition based on the 'days' variable
             if ($days == 0) {
                 $params = [$location, $customerId]; // No date filter, just location and customer_id
@@ -246,6 +246,7 @@ class ReportController extends Controller
                 'date',
                 'location',
                 DB::raw('COUNT(DISTINCT customer_id) AS customer_count'),
+                DB::raw('GROUP_CONCAT(DISTINCT customer_id SEPARATOR ", ") AS customer_ids'),
                 DB::raw('COUNT(DISTINCT orderid) AS order_id_count'),
                 DB::raw('SUM(count) AS product_id_count'),
                 DB::raw('SUM(count * price) AS total_products_price'),
@@ -315,7 +316,7 @@ class ReportController extends Controller
                     DB::raw('ROUND(SUM(count * price), 2) AS total_price')
                 )
                 ->where('date', $date)
-                ->groupBy('customer_id', 'customer_name', 'date', 'location', 'crm_exists', 'crm_link','crm_id')
+                ->groupBy('customer_id', 'customer_name', 'date', 'location', 'crm_exists', 'crm_link', 'crm_id')
                 ->get();
 
             return response()->json($customerData);
@@ -557,34 +558,34 @@ class ReportController extends Controller
     /**
      * Display ICT products with pagination and search
      */
-     public function ict(Request $request)
+    public function ict(Request $request)
     {
         $search = $request->input('search', '');
-        
+
         $query = DB::table('ict');
-        
+
         if (!empty($search)) {
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('ean_code', 'like', "%{$search}%")
-                  ->orWhere('colour_code', 'like', "%{$search}%")
-                  ->orWhere('colour_name', 'like', "%{$search}%")
-                  ->orWhere('finish', 'like', "%{$search}%")
-                  ->orWhere('tin_size', 'like', "%{$search}%")
-                  ->orWhere('ean_code_base', 'like', "%{$search}%")
-                  ->orWhere('base_description', 'like', "%{$search}%")
-                  ->orWhere('base_code', 'like', "%{$search}%");
+                    ->orWhere('colour_code', 'like', "%{$search}%")
+                    ->orWhere('colour_name', 'like', "%{$search}%")
+                    ->orWhere('finish', 'like', "%{$search}%")
+                    ->orWhere('tin_size', 'like', "%{$search}%")
+                    ->orWhere('ean_code_base', 'like', "%{$search}%")
+                    ->orWhere('base_description', 'like', "%{$search}%")
+                    ->orWhere('base_code', 'like', "%{$search}%");
             });
         }
-        
+
         $ictData = $query->orderBy('id', 'asc')->paginate(25);
-        
+
         return view('reports.ict', compact('ictData', 'search'));
     }
 
     /**
      * Search ICT products
      */
-public function search(Request $request)
+    public function search(Request $request)
     {
         return $this->ict($request); // Reuse the ict method for consistency
     }
@@ -592,120 +593,119 @@ public function search(Request $request)
     /**
      * Update quantity for ICT product
      */
- /**
- * Update quantity for ICT product
- */
-public function updateQuantity(Request $request)
-{
-    // Enable detailed error reporting for debugging
-    ini_set('display_errors', 1);
-    error_reporting(E_ALL);
+    /**
+     * Update quantity for ICT product
+     */
+    public function updateQuantity(Request $request)
+    {
+        // Enable detailed error reporting for debugging
+        ini_set('display_errors', 1);
+        error_reporting(E_ALL);
 
-    \Log::info('=== ICT QUANTITY UPDATE START ===');
-    \Log::info('Request data:', $request->all());
-    \Log::info('Headers:', $request->headers->all());
+        \Log::info('=== ICT QUANTITY UPDATE START ===');
+        \Log::info('Request data:', $request->all());
+        \Log::info('Headers:', $request->headers->all());
 
-    try {
-        // Check if we're receiving the request
-        if (!$request->has('id') || !$request->has('quantity')) {
-            \Log::error('Missing required fields', ['request' => $request->all()]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Missing required fields: id or quantity'
-            ], 400);
-        }
-
-        $id = $request->input('id');
-        $quantity = $request->input('quantity');
-
-        $eanCodeBase = $request->input('ean_code_base');
-
-        \Log::info('Processing update:', ['id' => $id, 'ean_code_base' => $eanCodeBase, 'quantity' => $quantity]);
-
-        // Basic validation
-        if (!is_numeric($quantity) || $quantity < 0) {
-            \Log::error('Invalid quantity', ['quantity' => $quantity]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid quantity'
-            ], 422);
-        }
-
-        if (empty($eanCodeBase)) {
-            \Log::error('Missing EAN Code Base', ['id' => $id]);
-             return response()->json([
-                'success' => false,
-                'message' => 'Missing EAN Code Base'
-            ], 422);
-        }
-
-        // Update the database by EAN Code Base
-        $affected = DB::table('ict')
-            ->where('ean_code_base', $eanCodeBase)
-            ->update([
-                'qty' => (int)$quantity
-            ]);
-
-        \Log::info('Update result:', ['affected_rows' => $affected]);
-
-        if ($affected) {
-            \Log::info("ICT product quantity updated successfully by EAN", [
-                'ean_code_base' => $eanCodeBase,
-                'quantity' => $quantity,
-                'user' => auth()->id() ?? 'unknown'
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Quantity updated successfully',
-                'data' => [
-                    'ean_code_base' => $eanCodeBase,
-                    'quantity' => $quantity
-                ]
-            ]);
-        } else {
-            // Check if records exist with this EAN
-            $exists = DB::table('ict')->where('ean_code_base', $eanCodeBase)->exists();
-            
-            if (!$exists) {
-                 return response()->json([
+        try {
+            // Check if we're receiving the request
+            if (!$request->has('id') || !$request->has('quantity')) {
+                \Log::error('Missing required fields', ['request' => $request->all()]);
+                return response()->json([
                     'success' => false,
-                    'message' => 'No records found with this EAN Code Base'
-                ], 404);
+                    'message' => 'Missing required fields: id or quantity'
+                ], 400);
             }
 
-            \Log::warning("No rows affected - quantity may already be set to this value", [
-                'ean_code_base' => $eanCodeBase,
-                'quantity' => $quantity
+            $id = $request->input('id');
+            $quantity = $request->input('quantity');
+
+            $eanCodeBase = $request->input('ean_code_base');
+
+            \Log::info('Processing update:', ['id' => $id, 'ean_code_base' => $eanCodeBase, 'quantity' => $quantity]);
+
+            // Basic validation
+            if (!is_numeric($quantity) || $quantity < 0) {
+                \Log::error('Invalid quantity', ['quantity' => $quantity]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid quantity'
+                ], 422);
+            }
+
+            if (empty($eanCodeBase)) {
+                \Log::error('Missing EAN Code Base', ['id' => $id]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Missing EAN Code Base'
+                ], 422);
+            }
+
+            // Update the database by EAN Code Base
+            $affected = DB::table('ict')
+                ->where('ean_code_base', $eanCodeBase)
+                ->update([
+                    'qty' => (int)$quantity
+                ]);
+
+            \Log::info('Update result:', ['affected_rows' => $affected]);
+
+            if ($affected) {
+                \Log::info("ICT product quantity updated successfully by EAN", [
+                    'ean_code_base' => $eanCodeBase,
+                    'quantity' => $quantity,
+                    'user' => auth()->id() ?? 'unknown'
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Quantity updated successfully',
+                    'data' => [
+                        'ean_code_base' => $eanCodeBase,
+                        'quantity' => $quantity
+                    ]
+                ]);
+            } else {
+                // Check if records exist with this EAN
+                $exists = DB::table('ict')->where('ean_code_base', $eanCodeBase)->exists();
+
+                if (!$exists) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No records found with this EAN Code Base'
+                    ], 404);
+                }
+
+                \Log::warning("No rows affected - quantity may already be set to this value", [
+                    'ean_code_base' => $eanCodeBase,
+                    'quantity' => $quantity
+                ]);
+
+                return response()->json([
+                    'success' => true, // Still success if no change needed
+                    'message' => 'Quantity already set to this value',
+                    'data' => [
+                        'ean_code_base' => $eanCodeBase,
+                        'quantity' => $quantity
+                    ]
+                ]);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Failed to update ICT quantity', [
+                'error_message' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'error_trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
             ]);
 
             return response()->json([
-                'success' => true, // Still success if no change needed
-                'message' => 'Quantity already set to this value',
-                'data' => [
-                    'ean_code_base' => $eanCodeBase,
-                    'quantity' => $quantity
-                ]
-            ]);
+                'success' => false,
+                'message' => 'Server error: ' . $e->getMessage()
+            ], 500);
+        } finally {
+            \Log::info('=== ICT QUANTITY UPDATE END ===');
         }
-
-    } catch (\Exception $e) {
-        \Log::error('Failed to update ICT quantity', [
-            'error_message' => $e->getMessage(),
-            'error_file' => $e->getFile(),
-            'error_line' => $e->getLine(),
-            'error_trace' => $e->getTraceAsString(),
-            'request_data' => $request->all()
-        ]);
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Server error: ' . $e->getMessage()
-        ], 500);
-    } finally {
-        \Log::info('=== ICT QUANTITY UPDATE END ===');
     }
-}
 
     /**
      * Display KS page with all customers and search functionality.
@@ -737,6 +737,35 @@ public function updateQuantity(Request $request)
             // Log the error for debugging
             Log::error('Error in ksPage: ' . $e->getMessage());
             return response()->json(['error' => 'Failed to load KS page: ' . $e->getMessage()], 500);
+        }
+    }
+    public function customerProductsByDate(Request $request)
+    {
+        try {
+            $date = $request->input('date');
+            $location = $request->input('location');
+            $customerId = $request->input('customer_id');
+
+            $query = DB::table('sale_data')
+                ->select(
+                    'product_id',
+                    'product_name',
+                    DB::raw('SUM(count) as count'),
+                    'price',
+                    DB::raw('ROUND(SUM(count * price), 2) AS total_price')
+                )
+                ->where('date', $date)
+                ->where('location', $location);
+
+            if ($customerId !== null && $customerId !== 'null' && $customerId !== '') {
+                $query->where('customer_id', $customerId);
+            }
+
+            $salesDetails = $query->groupBy('product_id', 'product_name', 'price')->get();
+
+            return response()->json($salesDetails);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 }

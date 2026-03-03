@@ -6,12 +6,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
-use App\SalesList;
+use App\Models\SalesList;
 use Carbon\Carbon;
 
 class CsvController extends Controller
 {
-   public function downloadCsv()
+    public function downloadCsv()
     {
         // Get all data from sales_lists table
         $saleItems = SalesList::all();

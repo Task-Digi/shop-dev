@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\SalesList;
+use App\Models\SalesList;
 
 class SaleListController extends Controller
 {
@@ -18,7 +18,8 @@ class SaleListController extends Controller
         return view('sale-items.create');
     }
 
-    public function view(){
+    public function view()
+    {
         $saleItems = SalesList::all();
         return view('sale-items.view', compact('saleItems'));
     }
@@ -30,7 +31,7 @@ class SaleListController extends Controller
             'date',
             'location',
             'type',
-            'payment' ,
+            'payment',
             'customerid',
             'productid',
             'orderid',
@@ -80,5 +81,4 @@ class SaleListController extends Controller
 
         return redirect('/Dashboard')->with('success', 'Sale item deleted successfully!');
     }
-
 }

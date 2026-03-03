@@ -6,9 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>ICT LIST</title>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
         integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <!-- Modern UI Styles -->
+    <link rel="stylesheet" href="{{asset('assets/css/modern-ui.css')}}?v=1">
     <style>
+        body { background-color: var(--bg-body); font-family: var(--font-family); }
         .quantity-control {
             display: flex;
             align-items: center;
@@ -65,42 +70,42 @@
 <body>
     @include('layouts.nav_bar')
 
-    <div class="container-fluid mt-3">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">ICT Products List</h5>
+    <div class="container-fluid mt-5 mb-5 px-4">
+        <div class="modern-card">
+            <div class="card-header bg-transparent border-bottom pb-3 mb-3">
+                <h5 class="card-title mb-0 text-gradient fw-bold">ICT Products List</h5>
             </div>
-            <div class="card-body">
+            <div class="card-body p-0">
                 <form method="GET" action="{{ route('ict.search') }}" class="mb-4">
                     <div class="row">
                         <div class="col-md-8">
-                            <input type="text" name="search" class="form-control form-control-sm"
+                            <input type="text" name="search" class="form-control form-control-modern"
                                 placeholder="Search by EAN Code, Colour Name, Base Description, etc." 
-                                value="{{ request('search') }}">
+                                value="{{ request('search') }}" style="border-radius: 8px; padding: 10px;">
                         </div>
                         <div class="col-md-4">
-                            <button type="submit" class="btn btn-primary btn-sm me-2">Search</button>
-                            <a href="{{ route('ict') }}" class="btn btn-outline-secondary btn-sm">Clear</a>
+                            <button type="submit" class="btn btn-modern-primary btn-sm me-2">Search</button>
+                            <a href="{{ route('ict') }}" class="btn btn-modern-secondary btn-sm">Clear</a>
                         </div>
                     </div>
                 </form>
 
                 @if(session('success'))
-                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                    <div class="alert alert-success alert-dismissible fade show shadow-sm border-0" role="alert">
                         {{ session('success') }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 @endif
 
                 @if(session('error'))
-                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <div class="alert alert-danger alert-dismissible fade show shadow-sm border-0" role="alert">
                         {{ session('error') }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
                 @endif
 
-                <div class="table-responsive">
-                    <table class="table table-sm table-striped table-hover">
+                <div class="table-responsive moderno-scroll">
+                    <table class="table table-modern table-hover align-middle">
                         <thead class="table-light">
                             <tr>
                                 <th>ID</th>
