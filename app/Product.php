@@ -4,14 +4,16 @@ namespace App;
 
 use Illuminate\Database\Eloquent\Model;
 
-class product extends Model
+class Product extends Model
 {
-    protected $table ='products';
+    public $timestamps = false; // Disables timestamps
+    protected $table = 'products';
 
     protected $fillable = [
         'product_id',
         'product_name',
         'price',
-        'retail'
+        'retail',
+        'ean_code'
     ];
 }

@@ -1,0 +1,174 @@
+/* Modern UI Design System */
+:root {
+    /* Color Palette - Premium & Modern */
+    --primary-color: #4F46E5; /* Indigo 600 */
+    --primary-hover: #4338CA; /* Indigo 700 */
+    --secondary-color: #10B981; /* Emerald 500 */
+    --secondary-hover: #059669; /* Emerald 600 */
+    --accent-color: #F59E0B; /* Amber 500 */
+    
+    /* Backgrounds & Surfaces */
+    --bg-body: #F3F4F6; /* Gray 100 */
+    --bg-surface: #FFFFFF;
+    --bg-glass: rgba(255, 255, 255, 0.7);
+    
+    /* Typography */
+    --text-main: #111827; /* Gray 900 */
+    --text-muted: #6B7280; /* Gray 500 */
+    --font-family: 'Inter', sans-serif;
+    
+    /* Shadows & Effects */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --border-radius: 0.75rem; /* 12px */
+    --border-color: #E5E7EB; /* Gray 200 */
+}
+
+body {
+    background-color: var(--bg-body);
+    font-family: var(--font-family);
+    color: var(--text-main);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+}
+
+/* Typography Tweaks */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-main);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    margin-bottom: 0.5rem;
+}
+
+/* Glassmorphism Card */
+.modern-card {
+    background: var(--bg-surface);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-md);
+    padding: 1.5rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.modern-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+/* Modern Buttons */
+.btn-modern-primary {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);
+}
+
+.btn-modern-primary:hover {
+    background-color: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(79, 70, 229, 0.4);
+    color: white;
+    text-decoration: none;
+}
+
+.btn-modern-secondary {
+    background-color: var(--bg-surface);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.btn-modern-secondary:hover {
+    background-color: #F9FAFB;
+    border-color: var(--text-muted);
+    color: var(--text-main);
+    text-decoration: none;
+}
+
+/* Navbar Modernization */
+.navbar-modern {
+    background-color: var(--bg-surface) !important;
+    box-shadow: var(--shadow-sm);
+    padding: 1rem 0;
+}
+
+.navbar-modern .navbar-brand {
+    font-weight: 800;
+    color: var(--primary-color) !important;
+    font-size: 1.5rem;
+}
+
+.navbar-modern .nav-link {
+    color: var(--text-muted) !important;
+    font-weight: 500;
+    transition: color 0.15s;
+}
+
+.navbar-modern .nav-link:hover {
+    color: var(--primary-color) !important;
+}
+
+/* Responsive Table */
+.modern-table-container {
+    overflow-x: auto;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-sm);
+    background: var(--bg-surface);
+}
+
+.table-modern {
+    width: 100%;
+    margin-bottom: 0;
+    color: var(--text-main);
+}
+
+.table-modern th {
+    background-color: #F9FAFB;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 1.5rem;
+}
+
+.table-modern td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+.table-modern tr:last-child td {
+    border-bottom: none;
+}
+
+.table-modern tr:hover {
+    background-color: #F9FAFB;
+}
+
+/* Utilities */
+.text-gradient {
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    background-image: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
