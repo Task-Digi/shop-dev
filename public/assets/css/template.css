@@ -1,0 +1,21 @@
+/* Base Template Styles */
+.card-header {
+    background-color: transparent;
+    border-bottom: 1px solid var(--border);
+}
+
+.badge {
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+/* Custom buttons from the original app */
+.btn-primary {
+    background-color: var(--primary) !important;
+    border-color: var(--primary) !important;
+}
+
+.btn-secondary {
+    background-color: var(--secondary) !important;
+    border-color: var(--secondary) !important;
+}
