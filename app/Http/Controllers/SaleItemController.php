@@ -200,6 +200,9 @@ class SaleItemController extends Controller
         $saleData->payment = $request->payment;
         $saleData->customer_id = $request->customerid;
         $saleData->customer_name = $customer ? $customer->customer_name : null;
+        $saleData->crm_exists = $customer ? $customer->crm_exists : null;
+        $saleData->crm_link = $customer ? $customer->crm_link : null;
+        $saleData->crm_id = $customer ? $customer->crm_id : null;
         $saleData->orderid = $request->orderid;
         $saleData->product_id = $request->productid;
         $saleData->product_name = $product ? $product->product_name : null;
