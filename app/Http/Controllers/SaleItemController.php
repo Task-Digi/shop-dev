@@ -67,6 +67,19 @@ class SaleItemController extends Controller
 
     public function store(Request $request)
     {
+        $request->validate([
+            'date' => 'required|date',
+            'location' => 'required|string',
+            'type' => 'required|string',
+            'payment' => 'required|string',
+            'customerid' => 'required|string',
+            'orderid' => 'required|string',
+            'productid' => 'required|array',
+            'productid.*' => 'required|string',
+            'count' => 'required|array',
+            'count.*' => 'required|numeric',
+        ]);
+
         $existingOrder = SalesList::where('orderid', $request->input('orderid'))->exists();
 
         if ($existingOrder) {
@@ -74,9 +87,16 @@ class SaleItemController extends Controller
             return back()->withErrors(['order_id' => 'Order ID already exists. Please choose a different one.']);
         }
 
+        DB::beginTransaction();
         try {
+            // Retrieve customer detail once
+            $customer = Customer::where('customer_id', $request->input('customerid'))->first();
+
             // Loop through each productid and count
             foreach ($request->input('productid') as $key => $productId) {
+                // Ensure count exists for the given key
+                $count = $request->input('count')[$key] ?? 0;
+
                 // Insert into SalesList table
                 $salesList = SalesList::create([
                     'date' => $request->input('date'),
@@ -86,13 +106,11 @@ class SaleItemController extends Controller
                     'customerid' => $request->input('customerid'),
                     'orderid' => $request->input('orderid'),
                     'productid' => $productId,
-                    'count' => $request->input('count')[$key],
+                    'count' => $count,
                 ]);
 
-                // Retrieve customer and product details
-                $customer = Customer::where('customer_id', $request->input('customerid'))->first();
+                // Retrieve product details
                 $product = Product::where('product_id', $productId)->first();
-
 
                 // Insert corresponding data into sale_data table
                 $salesData = SaleData::create([
@@ -110,17 +128,17 @@ class SaleItemController extends Controller
                     'product_name' => $product ? $product->product_name : null,
                     'price' => $this->snapshotUnitPriceFromProduct($product),
                     'retail' => $product ? $product->retail : null,
-                    'count' => $request->input('count')[$key],
+                    'count' => $count,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
-
-                // return $salesData;
             }
 
+            DB::commit();
             // Redirect back to the previous page with a success message
             return back()->with('success', 'Sale items created successfully!');
         } catch (\Exception $e) {
+            DB::rollBack();
             // Log the exception for debugging
             Log::error($e);
 
@@ -157,82 +175,96 @@ class SaleItemController extends Controller
     {
         // Validate the input data
         $request->validate([
-            'date' => 'required',
-            'location' => 'required',
-            'type' => 'required',
-            'payment' => 'required',
-            'customerid' => 'required',
-            'productid' => 'required',
-            'orderid' => 'required',
-            'count' => 'required',
+            'date' => 'required|date',
+            'location' => 'required|string',
+            'type' => 'required|string',
+            'payment' => 'required|string',
+            'customerid' => 'required|string',
+            'productid' => 'required|string',
+            'orderid' => 'required|string',
+            'count' => 'required|numeric',
         ]);
 
-        // Update the sales_lists table
-        \Illuminate\Support\Facades\Log::info("Update called for ID: $id");
-        \Illuminate\Support\Facades\Log::info("Request Data: ", $request->all());
+        Log::info("Update called for ID: $id");
+        Log::info("Request Data: ", $request->all());
 
-        $saleItem = SalesList::find($id);
-        if (!$saleItem) {
-            \Illuminate\Support\Facades\Log::error("SalesList NOT found for ID: $id");
-            return back()->with('error', 'Sale Item not found.');
+        DB::beginTransaction();
+        try {
+            $saleItem = SalesList::find($id);
+            if (!$saleItem) {
+                Log::error("SalesList NOT found for ID: $id");
+                return back()->with('error', 'Sale Item not found.');
+            }
+
+            $saleItem->update($request->all());
+            Log::info("SalesList updated for ID: $id");
+
+            // Fetch the related customer and product details
+            $customer = Customer::where('customer_id', $request->customerid)->first();
+            $product = Product::where('product_id', $request->productid)->first();
+
+            // Update the sale_data table
+            $saleData = SaleData::find($id);
+
+            if (!$saleData) {
+                Log::error("SaleData NOT found for ID: $id");
+                DB::rollBack();
+                return back()->with('error', 'Sale Data record not found.');
+            }
+
+            $saleData->date = $request->date;
+            $saleData->location = $request->location;
+            $saleData->type = $request->type;
+            $saleData->payment = $request->payment;
+            $saleData->customer_id = $request->customerid;
+            $saleData->customer_name = $customer ? $customer->customer_name : null;
+            $saleData->crm_exists = $customer ? $customer->crm_exists : null;
+            $saleData->crm_link = $customer ? $customer->crm_link : null;
+            $saleData->crm_id = $customer ? $customer->crm_id : null;
+            $saleData->orderid = $request->orderid;
+            $saleData->product_id = $request->productid;
+            $saleData->product_name = $product ? $product->product_name : null;
+            $saleData->price = $this->snapshotUnitPriceFromProduct($product);
+            $saleData->retail = $product ? $product->retail : null;
+            $saleData->count = $request->count;
+            $saleData->updated_at = now();
+
+            // Save the updated sale_data
+            $saved = $saleData->save();
+            Log::info("SaleData save result for ID: $id : " . ($saved ? 'true' : 'false'));
+
+            DB::commit();
+            // Redirect to the view page after updating
+            return redirect('/Dashboard')->with('success', 'Sale item updated successfully!');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error updating sale item ID: $id. Error: " . $e->getMessage());
+            return back()->with('error', 'Error updating sale item. Please try again.');
         }
-
-        $saleItem->update($request->all());
-        \Illuminate\Support\Facades\Log::info("SalesList updated for ID: $id");
-
-        // Fetch the related customer and product details
-        $customer = Customer::where('customer_id', $request->customerid)->first();
-        $product = Product::where('product_id', $request->productid)->first();
-
-        // Update the sale_data table
-        $saleData = SaleData::find($id);
-
-        if (!$saleData) {
-            \Illuminate\Support\Facades\Log::error("SaleData NOT found for ID: $id");
-            // Optionally, you might want to consider if you should error here or just log it. 
-            // Given the original code tried to find it, it's safer to report error.
-            return back()->with('error', 'Sale Data record not found.');
-        }
-
-        $saleData->date = $request->date;
-        $saleData->location = $request->location;
-        $saleData->type = $request->type;
-        $saleData->payment = $request->payment;
-        $saleData->customer_id = $request->customerid;
-        $saleData->customer_name = $customer ? $customer->customer_name : null;
-        $saleData->crm_exists = $customer ? $customer->crm_exists : null;
-        $saleData->crm_link = $customer ? $customer->crm_link : null;
-        $saleData->crm_id = $customer ? $customer->crm_id : null;
-        $saleData->orderid = $request->orderid;
-        $saleData->product_id = $request->productid;
-        $saleData->product_name = $product ? $product->product_name : null;
-        $saleData->price = $this->snapshotUnitPriceFromProduct($product);
-        $saleData->retail = $product ? $product->retail : null;
-        $saleData->count = $request->count;
-        $saleData->updated_at = now();
-
-        // Save the updated sale_data
-        $saved = $saleData->save();
-        \Illuminate\Support\Facades\Log::info("SaleData save result for ID: $id : " . ($saved ? 'true' : 'false'));
-
-        // Redirect to the view page after updating
-        return redirect('/Dashboard')->with('success', 'Sale item updated successfully!');
     }
 
     public function destroy($id)
     {
-        $saleItem = SalesList::find($id);
-        $saleData = SaleData::find($id);
+        DB::beginTransaction();
+        try {
+            $saleItem = SalesList::find($id);
+            $saleData = SaleData::find($id);
 
-        if ($saleItem) {
-            $saleItem->delete();
+            if ($saleItem) {
+                $saleItem->delete();
+            }
+
+            if ($saleData) {
+                $saleData->delete();
+            }
+
+            DB::commit();
+            return redirect('/Dashboard')->with('success', 'Sale item deleted successfully!');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error deleting sale item ID: $id. Error: " . $e->getMessage());
+            return back()->with('error', 'Error deleting sale item. Please try again.');
         }
-
-        if ($saleData) {
-            $saleData->delete();
-        }
-
-        return redirect('/Dashboard')->with('success', 'Sale item deleted successfully!');
     }
 
     public function validateOrderId(Request $request)

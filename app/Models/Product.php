@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @mixin \Illuminate\Database\Eloquent\Builder
+ */
 class Product extends Model
 {
     public $timestamps = false; // Disables timestamps
@@ -31,3 +34,4 @@ class Product extends Model
         'ean_code'
     ];
 }
+

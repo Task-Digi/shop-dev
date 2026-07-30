@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @mixin \Illuminate\Database\Eloquent\Builder
+ */
 class SalesList extends Model
 {
     protected $table = 'sales_lists';
@@ -20,3 +23,4 @@ class SalesList extends Model
         // Add other fields as needed
     ];
 }
+

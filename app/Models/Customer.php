@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @mixin \Illuminate\Database\Eloquent\Builder
+ */
 class Customer extends Model
 {
     public $timestamps = false; // Disables timestamps
@@ -18,3 +21,4 @@ class Customer extends Model
         'crm_id'
     ];
 }
+

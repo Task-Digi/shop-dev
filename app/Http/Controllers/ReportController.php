@@ -134,8 +134,8 @@ class ReportController extends Controller
         }
 
         // Execute the queries
-        // $salesData1 drives the (currently collapsed) chart, so we keep it as a plain collection.
-        $salesData1 = $salesData1Query->get();
+        // $salesData1 drives the (currently collapsed) chart, so we limit it to the top 100 to prevent memory exhaustion.
+        $salesData1 = $salesData1Query->limit(100)->get();
 
         // $salesData drives the main table — paginate it so the page stays
         // fast even with thousands of customers, and so the user gets proper
@@ -285,7 +285,7 @@ class ReportController extends Controller
             $resolvedName = DB::table('sale_data')
                 ->join('products', 'sale_data.product_id', '=', 'products.product_id')
                 ->where('sale_data.product_id', $productid)
-                ->value(DB::raw($this->resolvedProductNameSql()));
+                ->selectRaw($this->resolvedProductNameSql() . ' as product_name')->value('product_name');
 
             $product_name = $resolvedName ?: 'Unknown Product';
         } else {
@@ -300,7 +300,7 @@ class ReportController extends Controller
             $perPage = 25;
         }
         $salesData  = $salesDataQuery->paginate($perPage)->withQueryString();
-        $salesData1 = $salesData1Query->get();
+        $salesData1 = $salesData1Query->limit(100)->get();
 
         // Return the view with necessary data
         return view('reports.product', compact('salesData', 'salesData1', 'product_name', 'productid', 'days', 'searchName'));
@@ -770,14 +770,14 @@ class ReportController extends Controller
         ini_set('display_errors', 1);
         error_reporting(E_ALL);
 
-        \Log::info('=== ICT QUANTITY UPDATE START ===');
-        \Log::info('Request data:', $request->all());
-        \Log::info('Headers:', $request->headers->all());
+        Log::info('=== ICT QUANTITY UPDATE START ===');
+        Log::info('Request data:', $request->all());
+        Log::info('Headers:', $request->headers->all());
 
         try {
             // Check if we're receiving the request
             if (!$request->has('id') || !$request->has('quantity')) {
-                \Log::error('Missing required fields', ['request' => $request->all()]);
+                Log::error('Missing required fields', ['request' => $request->all()]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Missing required fields: id or quantity'
@@ -789,11 +789,11 @@ class ReportController extends Controller
 
             $eanCodeBase = $request->input('ean_code_base');
 
-            \Log::info('Processing update:', ['id' => $id, 'ean_code_base' => $eanCodeBase, 'quantity' => $quantity]);
+            Log::info('Processing update:', ['id' => $id, 'ean_code_base' => $eanCodeBase, 'quantity' => $quantity]);
 
             // Basic validation
             if (!is_numeric($quantity) || $quantity < 0) {
-                \Log::error('Invalid quantity', ['quantity' => $quantity]);
+                Log::error('Invalid quantity', ['quantity' => $quantity]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Invalid quantity'
@@ -801,7 +801,7 @@ class ReportController extends Controller
             }
 
             if (empty($eanCodeBase)) {
-                \Log::error('Missing EAN Code Base', ['id' => $id]);
+                Log::error('Missing EAN Code Base', ['id' => $id]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Missing EAN Code Base'
@@ -815,10 +815,10 @@ class ReportController extends Controller
                     'qty' => (int)$quantity
                 ]);
 
-            \Log::info('Update result:', ['affected_rows' => $affected]);
+            Log::info('Update result:', ['affected_rows' => $affected]);
 
             if ($affected) {
-                \Log::info("ICT product quantity updated successfully by EAN", [
+                Log::info("ICT product quantity updated successfully by EAN", [
                     'ean_code_base' => $eanCodeBase,
                     'quantity' => $quantity,
                     'user' => auth()->id() ?? 'unknown'
@@ -843,7 +843,7 @@ class ReportController extends Controller
                     ], 404);
                 }
 
-                \Log::warning("No rows affected - quantity may already be set to this value", [
+                Log::warning("No rows affected - quantity may already be set to this value", [
                     'ean_code_base' => $eanCodeBase,
                     'quantity' => $quantity
                 ]);
@@ -858,7 +858,7 @@ class ReportController extends Controller
                 ]);
             }
         } catch (\Exception $e) {
-            \Log::error('Failed to update ICT quantity', [
+            Log::error('Failed to update ICT quantity', [
                 'error_message' => $e->getMessage(),
                 'error_file' => $e->getFile(),
                 'error_line' => $e->getLine(),
@@ -871,7 +871,7 @@ class ReportController extends Controller
                 'message' => 'Server error: ' . $e->getMessage()
             ], 500);
         } finally {
-            \Log::info('=== ICT QUANTITY UPDATE END ===');
+            Log::info('=== ICT QUANTITY UPDATE END ===');
         }
     }
 
