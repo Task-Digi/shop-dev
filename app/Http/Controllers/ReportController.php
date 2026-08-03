@@ -356,6 +356,8 @@ class ReportController extends Controller
                 DB::raw('SUM(count) AS product_id_count'),
                 DB::raw('SUM(count * price) AS total_products_price'),
                 DB::raw('SUM(count * retail) AS total_retail_value'),
+                DB::raw("SUM(CASE WHEN type = 'MalProff MPP' THEN count * price ELSE 0 END) AS mpp_sales"),
+                DB::raw("SUM(CASE WHEN type = 'Fargerike' THEN count * price ELSE 0 END) AS fargerike_sales"),
                 $this->weightedUnitPriceAvg()
             )
             ->groupBy('date', 'location')
@@ -363,7 +365,12 @@ class ReportController extends Controller
 
         // Prepare the query for total sales per day
         $salesData1Query = DB::table('sale_data')
-            ->select('date', DB::raw('SUM(count * price) as total_sales'))
+            ->select(
+                'date', 
+                DB::raw('SUM(count * price) as total_sales'),
+                DB::raw("SUM(CASE WHEN type = 'MalProff MPP' THEN count * price ELSE 0 END) AS mpp_sales"),
+                DB::raw("SUM(CASE WHEN type = 'Fargerike' THEN count * price ELSE 0 END) AS fargerike_sales")
+            )
             ->groupBy('date')
             ->orderBy('date', 'ASC');
 

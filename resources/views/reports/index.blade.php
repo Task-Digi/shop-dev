@@ -132,7 +132,9 @@
                             <th>No.Orders</th>
                             <th>No.Sold</th>
                             <th style="text-align: right">Price</th>
-                            <th style="text-align: right">Sum.Sales</th>
+                            <th style="text-align: right">MPP Sales</th>
+                            <th style="text-align: right">Fargerike Sales</th>
+                            <th style="text-align: right">Total Sales</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -150,6 +152,12 @@
                                 {{ number_format($sale->product_id_count, 0, '.', ',') }}
                             </td>
                             <td style="text-align: right;">{{ $sale->unit_price_avg !== null ? number_format($sale->unit_price_avg, 2, '.', ',') : '–' }}</td>
+                            <td style="text-align: right;">
+                                {{ number_format($sale->mpp_sales, 2, '.', ',') }}
+                            </td>
+                            <td style="text-align: right;">
+                                {{ number_format($sale->fargerike_sales, 2, '.', ',') }}
+                            </td>
                             <td style="text-align: right;">
                                 {{ number_format($sale->total_products_price, 2, '.', ',') }}
                             </td>
