@@ -44,6 +44,11 @@
             <div class="sales-chart-canvas-wrap">
                 <canvas id="salesChart" width="900" height="280"></canvas>
             </div>
+            @if ($chartLimited ?? false)
+                <p class="text-muted small mb-0 mt-2">
+                    For performance, the All Days chart shows the latest 366 calendar days. The table still includes the complete history.
+                </p>
+            @endif
             <div class="sales-chart-pagination-ui" aria-hidden="true">
                 <button type="button" class="sales-chart-page-btn" disabled>Previous</button>
                 <span class="sales-chart-page-info">Page 1 of 1</span>
@@ -51,6 +56,26 @@
             </div>
         </div>
         <style>
+            .sales-report-filter-bar {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            .sales-report-filter-bar .form-control,
+            .sales-report-filter-bar select {
+                width: auto;
+                min-width: 130px;
+                margin: 0 !important;
+            }
+
+            @media (max-width: 767.98px) {
+                .sales-report-filter-bar > * {
+                    width: 100% !important;
+                }
+            }
+
             .sales-report-chart-panel {
                 background: #fff;
                 border-radius: 6px;
@@ -92,9 +117,9 @@
 
     </div>
     <div class="card-header">
-        <form method="GET" action="{{ route('report') }}" class="form-inline my-2 my-lg-1" id="salesReportForm">
+        <form method="GET" action="{{ route('report') }}" class="sales-report-filter-bar my-2 my-lg-1" id="salesReportForm">
             <label for="days">Select days:</label>
-            <select name="days" id="days" onchange="handleDaysChange()">
+            <select name="days" id="days" class="form-control" onchange="handleDaysChange()">
                 <option value="" disabled {{ is_null($days) ? 'selected' : '' }}>Select days</option>
                 <option value="7" {{ $days == 7 ? 'selected' : '' }}>Last 7 days</option>
                 <option value="28" {{ $days == 28 ? 'selected' : '' }}>Last 28 days</option>
@@ -103,9 +128,22 @@
             </select>
 
             <input type="date" name="searchDate" id="searchDate" value="{{ request()->input('searchDate') }}"
-                class="form-control mx-2" onchange="clearDaysDropdown()">
-            <button type="submit" class="btn btn-secondary">Search by Date</button>
+                class="form-control mx-2" onchange="handleDateChange()">
+            <a href="{{ route('report') }}" class="btn btn-outline-secondary">Clear</a>
         </form>
+        <div id="dailySalesLoading" class="alert alert-info py-2 mt-2 mb-0" role="status" style="display:none;">
+            Loading sales report...
+        </div>
+        <small class="text-muted d-block mt-2">
+            Active view:
+            @if ($searchDate)
+                {{ \Carbon\Carbon::parse($searchDate)->format('d.m.Y') }}
+            @elseif ($days === 'all')
+                All days
+            @else
+                Last {{ $days }} days
+            @endif
+        </small>
     </div>
 
 
@@ -138,7 +176,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach ($salesData as $sale)
+                        @forelse ($salesData as $sale)
                         <tr class="mobile-row" data-date="{{ $sale->date }}">
                             <td>{{ \Carbon\Carbon::parse($sale->date)->format('d.m.y') }}</td>
                             <td>{{ $sale->location }}</td>
@@ -168,10 +206,44 @@
                         </tr>
                         <tr class="hidden-row1-products" style="display: none;">
                         </tr>
-                        @endforeach
+                        @empty
+                        <tr>
+                            <td colspan="10" class="text-center text-muted py-5">
+                                <strong>No sales found.</strong><br>
+                                <span>Try another date or clear the current filters.</span>
+                            </td>
+                        </tr>
+                        @endforelse
 
                     </tbody>
                 </table>
+
+                @if ($salesData->onFirstPage() && !$salesData->hasMorePages())
+                    @if ($salesData->count() > 0)
+                        <small class="text-muted d-block mt-3">
+                            Showing all {{ $salesData->count() }} rows
+                        </small>
+                    @endif
+                @else
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mt-3">
+                        <small class="text-muted mb-2">
+                            Page {{ $salesData->currentPage() }} ({{ $salesData->count() }} rows shown)
+                        </small>
+                        <div class="btn-group mb-2" role="navigation" aria-label="Daily Sales pagination">
+                            @if ($salesData->onFirstPage())
+                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled>Previous</button>
+                            @else
+                                <a class="btn btn-sm btn-outline-secondary" href="{{ $salesData->previousPageUrl() }}" rel="prev">Previous</a>
+                            @endif
+
+                            @if ($salesData->hasMorePages())
+                                <a class="btn btn-sm btn-outline-secondary" href="{{ $salesData->nextPageUrl() }}" rel="next">Next</a>
+                            @else
+                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled>Next</button>
+                            @endif
+                        </div>
+                    </div>
+                @endif
 
                 <div id="crmModal" class="modal"
                     style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
@@ -204,13 +276,22 @@
         }
 
         // Submit the form automatically
-        document.getElementById("salesReportForm").submit();
+        document.getElementById("salesReportForm").requestSubmit();
     }
 
     function clearDaysDropdown() {
         // When a date is selected, clear the 'Select days' dropdown
         document.getElementById("days").value = '';
     }
+
+    function handleDateChange() {
+        clearDaysDropdown();
+        document.getElementById('salesReportForm').requestSubmit();
+    }
+
+    document.getElementById('salesReportForm').addEventListener('submit', function() {
+        document.getElementById('dailySalesLoading').style.display = 'block';
+    });
 </script>
 
 <script>
@@ -463,6 +544,8 @@
             $('.hidden-row1').remove();
 
             var date = $(this).data('date');
+            var location = $(this).children('td').eq(1).text().trim();
+            var drillDownKey = date + '|' + location;
             // console.log(date, "date");
             var hiddenRow = $(this).siblings('.hidden-row1');
             var clickedRow = $(this); // Store reference to the clicked row
@@ -472,7 +555,7 @@
                 hiddenRow = $('<tr class="hidden-row"></tr>').insertAfter(clickedRow);
             }
 
-            var isHiddenRowVisible = sessionStorage.getItem('hiddenRowVisible') === date;
+            var isHiddenRowVisible = sessionStorage.getItem('hiddenRowVisible') === drillDownKey;
             var customer_name = @json($customer_name);
             if (!isHiddenRowVisible && !customer_name) {
                 console.log(!hiddenRow.hasClass('loaded'), "tttttt")
@@ -480,6 +563,9 @@
                 $.ajax({
                     url: '/customers/' + date,
                     method: 'GET',
+                    data: {
+                        location: location
+                    },
                     success: function(response) {
                         // Sort response array based on customer_name in ascending order
                         response.sort(function(a, b) {
@@ -596,7 +682,7 @@
 
                         // Mark hidden row as loaded and show it
                         hiddenRow.addClass('loaded').show();
-                        sessionStorage.setItem('hiddenRowVisible', date);
+                        sessionStorage.setItem('hiddenRowVisible', drillDownKey);
                         ajaxInProgress = false;
                     },
                     error: function(xhr, status, error) {

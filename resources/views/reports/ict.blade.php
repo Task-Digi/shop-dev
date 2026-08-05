@@ -152,6 +152,17 @@
                 justify-content: center;
                 text-align: center;
             }
+
+            .ict-search-actions,
+            .ict-search-actions .btn {
+                width: 100%;
+            }
+
+            .ict-search-actions {
+                display: flex;
+                gap: 0.5rem;
+                margin-top: 0.5rem;
+            }
         }
     </style>
 </head>
@@ -165,18 +176,21 @@
                 <h5 class="card-title mb-0 text-gradient fw-bold">ICT Products List</h5>
             </div>
             <div class="card-body p-0">
-                <form method="GET" action="{{ route('ict.search') }}" class="mb-4">
-                    <div class="row">
+                <form method="GET" action="{{ route('ict.search') }}" class="mb-4" id="ictSearchForm">
+                    <div class="row g-2 align-items-center">
                         <div class="col-md-8">
-                            <input type="text" name="search" class="form-control form-control-modern"
+                            <input type="search" name="search" class="form-control form-control-modern"
                                 placeholder="Search by EAN Code, Colour Name, Base Description, etc."
-                                value="{{ request('search') }}" style="border-radius: 8px; padding: 10px;">
+                                value="{{ request('search') }}" aria-label="Search ICT products" style="border-radius: 8px; padding: 10px;">
                         </div>
-                        <div class="col-md-4">
-                            <button type="submit" class="btn btn-modern-primary btn-sm me-2">Search</button>
+                        <div class="col-md-4 ict-search-actions">
+                            <button type="submit" class="btn btn-modern-primary btn-sm me-2" id="ictSearchButton">Search</button>
                             <a href="{{ route('ict') }}" class="btn btn-modern-secondary btn-sm">Clear</a>
                         </div>
                     </div>
+                    @if ($search !== '')
+                        <small class="text-muted d-block mt-2">Active search: <strong>{{ $search }}</strong></small>
+                    @endif
                 </form>
 
                 @if(session('success'))
@@ -221,7 +235,7 @@
                                 <td>{{ $ict->ean_code_base }}</td>
                                 <td class="text-center">
                                     <div class="quantity-control">
-                                        <button class="btn btn-sm btn-outline-danger btn-quantity"
+                                        <button type="button" class="btn btn-sm btn-outline-danger btn-quantity"
                                             onclick="updateQuantity({{ $ict->id }}, -1)"
                                             title="Decrease Quantity">
                                             −
@@ -234,7 +248,7 @@
                                             min="0"
                                             onchange="updateQuantityDirect({{ $ict->id }})"
                                             onblur="validateQuantity({{ $ict->id }})">
-                                        <button class="btn btn-sm btn-outline-success btn-quantity"
+                                        <button type="button" class="btn btn-sm btn-outline-success btn-quantity"
                                             onclick="updateQuantity({{ $ict->id }}, 1)"
                                             title="Increase Quantity">
                                             +
@@ -273,6 +287,12 @@
     </script>
 
     <script>
+        document.getElementById('ictSearchForm').addEventListener('submit', function() {
+            const button = document.getElementById('ictSearchButton');
+            button.disabled = true;
+            button.textContent = 'Searching...';
+        });
+
         // Store original values for error recovery
         const originalValues = new Map();
 

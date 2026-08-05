@@ -135,6 +135,14 @@
                 </div>
             @endif
 
+            @if (session('success'))
+                <div class="alert alert-success" role="alert">{{ session('success') }}</div>
+            @endif
+
+            @if (session('error'))
+                <div class="alert alert-danger" role="alert">{{ session('error') }}</div>
+            @endif
+
             <form method="POST" action="/home" id="saleForm">
                 @csrf
 
@@ -144,7 +152,7 @@
                     <div class="form-group row align-items-center">
                         <label for="orderid" class="col-12 col-md-2 col-form-label">Order ID:</label>
                         <div class="col-12 col-md-4">
-                            <input type="text" id="orderid" name="orderid" class="form-control" required>
+                            <input type="text" id="orderid" name="orderid" class="form-control" value="{{ old('orderid') }}" maxlength="255" required>
                         </div>
                         <label for="type" class="col-12 col-md-1 col-form-label">Type:</label>
                         <div class="col-12 col-md-4">
@@ -162,7 +170,7 @@
                     <div class="form-group row align-items-center">
                         <label for="customerid" class="col-12 col-md-2 col-form-label">Customer ID:</label>
                         <div class="col-12 col-md-4">
-                            <input type="text" id="customerid" name="customerid" class="form-control" required>
+                            <input type="text" id="customerid" name="customerid" class="form-control" value="{{ old('customerid') }}" maxlength="255" required>
                         </div>
                         <label for="payment" class="col-12 col-md-1 col-form-label">Payment:</label>
                         <div class="col-12 col-md-4">
@@ -199,13 +207,13 @@
                                     <div class="col-12 col-md-4">
                                         <label for="productid">Product ID:</label>
                                         <div class="product-id-field">
-                                            <input type="text" id="productid" name="productid[]" class="form-control">
+                                            <input type="text" id="productid" name="productid[]" class="form-control" value="{{ old('productid.0') }}" maxlength="255" required>
                                             <div class="productid-alert"></div>
                                         </div>
                                     </div>
                                     <div class="col-12 col-md-4">
                                         <label for="count">Count:</label>
-                                        <input type="text" name="count[]" class="form-control">
+                                        <input type="number" name="count[]" class="form-control" value="{{ old('count.0') }}" min="1" max="1000000" step="1" required>
                                     </div>
 
                                     <div class="col-12 col-md-4">
@@ -621,6 +629,9 @@
 
                 // If there are still product ID fields left, submit the form
                 if ($('input[name="productid[]"]').length > 0) {
+                    var submitButton = document.getElementById('createSaleItemForm');
+                    submitButton.disabled = true;
+                    submitButton.textContent = 'SAVING...';
                     this.submit();
                 } else {
                     alert('Please enter at least one product ID.');

@@ -17,6 +17,7 @@
             integrity="sha384-ho+j7jyWK8fNQe+A12Hb8AhRq26LrZ/JpcUGGOn+Y7RsweNrtN/tE3MoK7ZeZDyx" crossorigin="anonymous">
         </script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     </head>
     @include('layouts.nav_bar')
     <div class="sold-registry-container">
@@ -29,6 +30,14 @@
             <button id="clearFilters" type="button" class="btn btn-warning top-action-btn">Clear Filters</button>
         </div>
 
+        @if (session('success'))
+            <div class="alert alert-success" role="alert">{{ session('success') }}</div>
+        @endif
+
+        @if (session('error'))
+            <div class="alert alert-danger" role="alert">{{ session('error') }}</div>
+        @endif
+
         @if ($errors->any())
             <div class="alert alert-danger">
                 <ul>
@@ -38,6 +47,8 @@
                 </ul>
             </div>
         @endif
+        <div id="registryFeedback" class="alert mb-3" role="status" style="display:none;"></div>
+        <small id="activeFilterSummary" class="text-muted d-block mb-2">No active filters</small>
         <div class="row">
             <div class="col-12">
                 <form method="GET" action="{{ route('saleitems.datasearch') }}" class="mb-3" id="soldRegistrySearchForm" onsubmit="return false;">
@@ -404,6 +415,13 @@
                         d.product_id_filter    = $('.col-filter[data-col="product_id"]').val() || '';
                         d.count_filter         = $('.col-filter[data-col="count"]').val() || '';
                         d.search_global        = $('#search').val() || '';
+                    },
+                    error: function() {
+                        $('#registryFeedback')
+                            .removeClass('alert-info alert-success')
+                            .addClass('alert-danger')
+                            .text('Could not load Sold Registry data. Please retry or clear the filters.')
+                            .show();
                     }
                 },
                 columns: [
@@ -431,7 +449,7 @@
                                 +       '<path d="M14.06 4.19l3.75 3.75"></path>'
                                 +     '</svg>'
                                 +   '</a>'
-                                +   '<form action="/' + id + '" method="POST" style="display:inline;" onsubmit="return confirm(\'Are you sure you want to delete this sale item?\');">'
+                                +   '<form action="/' + id + '" method="POST" style="display:inline;" onsubmit="return confirmDeleteSale(this);">'
                                 +     '<input type="hidden" name="_token" value="' + csrfToken + '">'
                                 +     '<input type="hidden" name="_method" value="DELETE">'
                                 +     '<button type="submit" class="btn btn-sm btn-link action-btn action-icon-only action-delete-icon" title="Delete" aria-label="Delete">'
@@ -456,6 +474,70 @@
                     lengthMenu: 'Show _MENU_ entries'
                 }
             });
+
+            function updateActiveFilterSummary() {
+                var activeCount = 0;
+                if (($('#search').val() || '').trim() !== '') activeCount++;
+                $('.col-filter').each(function() {
+                    if (String($(this).val() || '').trim() !== '') activeCount++;
+                });
+
+                $('#activeFilterSummary').text(activeCount
+                    ? activeCount + ' active filter' + (activeCount === 1 ? '' : 's')
+                    : 'No active filters');
+            }
+
+            table.on('processing.dt', function(e, settings, processing) {
+                if (processing) {
+                    $('#registryFeedback')
+                        .removeClass('alert-danger alert-success')
+                        .addClass('alert-info')
+                        .text('Loading Sold Registry...')
+                        .show();
+                } else if (!$('#registryFeedback').hasClass('alert-danger')) {
+                    $('#registryFeedback').hide();
+                }
+            });
+
+            table.on('draw.dt', updateActiveFilterSummary);
+
+            window.confirmDeleteSale = function(form) {
+                if (form.dataset.submitting === 'true') return false;
+
+                var cells = $(form).closest('tr').children('td');
+                var orderId = cells.eq(6).text().trim();
+                var productId = cells.eq(7).text().trim();
+                var message = 'Order ' + orderId + ' / Product ' + productId + '. This action cannot be undone.';
+
+                // Keep a native fallback in case the SweetAlert CDN is unavailable.
+                if (typeof Swal === 'undefined') {
+                    if (!window.confirm('Delete ' + message)) return false;
+                    form.dataset.submitting = 'true';
+                    $(form).find('button[type="submit"]').prop('disabled', true);
+                    return true;
+                }
+
+                Swal.fire({
+                    title: 'Delete sale item?',
+                    text: message,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc3545',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: 'Yes, delete it',
+                    cancelButtonText: 'Cancel',
+                    reverseButtons: true,
+                    focusCancel: true
+                }).then(function(result) {
+                    if (!result.isConfirmed || form.dataset.submitting === 'true') return;
+
+                    form.dataset.submitting = 'true';
+                    $(form).find('button[type="submit"]').prop('disabled', true);
+                    form.submit();
+                });
+
+                return false;
+            };
 
             // Debounced reload for text filters so we don't hammer the server on every keystroke.
             var reloadTimer = null;

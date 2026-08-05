@@ -344,6 +344,11 @@ class ReportController extends Controller
         // Get the 'days' and 'searchDate' values from the request
         $days = $request->input('days', 7); // Default to 7 days if no selection is provided
         $searchDate = $request->input('searchDate');
+        $perPage = (int) $request->input('per_page', 25);
+
+        if (!in_array($perPage, [25, 50, 100], true)) {
+            $perPage = 25;
+        }
 
         // Prepare the base query for sales data
         $salesDataQuery = DB::table('sale_data')
@@ -351,7 +356,6 @@ class ReportController extends Controller
                 'date',
                 'location',
                 DB::raw('COUNT(DISTINCT customer_id) AS customer_count'),
-                DB::raw('GROUP_CONCAT(DISTINCT customer_id SEPARATOR ", ") AS customer_ids'),
                 DB::raw('COUNT(DISTINCT orderid) AS order_id_count'),
                 DB::raw('SUM(count) AS product_id_count'),
                 DB::raw('SUM(count * price) AS total_products_price'),
@@ -377,8 +381,10 @@ class ReportController extends Controller
         // Apply date filtering based on the input
         if ($searchDate) {
             // If a specific date is searched, filter by that date
-            $salesDataQuery->whereDate('date', '=', $searchDate);
-            $salesData1Query->whereDate('date', '=', $searchDate);
+            // `date` is already a DATE column, so a direct comparison can use
+            // an index while WHERE DATE(date) generally cannot.
+            $salesDataQuery->where('date', $searchDate);
+            $salesData1Query->where('date', $searchDate);
             $days = null;
         } elseif ($days && $days !== 'all') {
             // If $days is provided and not 'all', filter by the range of days
@@ -388,8 +394,22 @@ class ReportController extends Controller
         }
         // No filter applied for 'all' days selection, as it fetches all records
 
-        // Execute the queries
-        $salesData = $salesDataQuery->get();
+        // Keep the drill-down table bounded. The selected filters and page size
+        // remain in the URL while the user moves through the result pages.
+        $salesData = $salesDataQuery
+            ->simplePaginate($perPage)
+            ->withQueryString();
+
+        // An all-time daily chart can create a very large JSON/DOM payload. The
+        // table above still covers the complete history; only the chart is
+        // bounded to the most recent 366 calendar days for browser performance.
+        $chartLimited = false;
+        if (!$searchDate && $days === 'all') {
+            $chartStartDate = now()->subDays(365)->toDateString();
+            $salesData1Query->where('date', '>=', $chartStartDate);
+            $chartLimited = true;
+        }
+
         $salesData1 = $salesData1Query->get();
 
         // Full calendar-aligned series for the chart (same filters as $salesData1)
@@ -399,7 +419,17 @@ class ReportController extends Controller
         $customer_name = "";
         $customerId = "";
 
-        return view('reports.index', compact('salesData', 'customer_name', 'customerId', 'salesData1', 'days', 'searchDate', 'chartSeries'));
+        return view('reports.index', compact(
+            'salesData',
+            'customer_name',
+            'customerId',
+            'salesData1',
+            'days',
+            'searchDate',
+            'chartSeries',
+            'chartLimited',
+            'perPage'
+        ));
     }
 
     /**
@@ -472,10 +502,10 @@ class ReportController extends Controller
         return response()->json($customerData);
     }
 
-    public function getCustomersByDate($date)
+    public function getCustomersByDate(Request $request, $date)
     {
         try {
-            $customerData = DB::table('sale_data')
+            $query = DB::table('sale_data')
                 ->select(
                     'customer_id',
                     'customer_name',
@@ -489,7 +519,15 @@ class ReportController extends Controller
                     DB::raw('ROUND(SUM(count * price), 2) AS total_price'),
                     DB::raw('ROUND(SUM(count * price) / NULLIF(SUM(count), 0), 2) AS unit_price_avg')
                 )
-                ->where('date', $date)
+                ->where('date', $date);
+
+            // The parent report is grouped by date + location. Restricting the
+            // drill-down to that location avoids fetching unrelated customers.
+            if ($request->filled('location')) {
+                $query->where('location', $request->input('location'));
+            }
+
+            $customerData = $query
                 ->groupBy('customer_id', 'customer_name', 'date', 'location', 'crm_exists', 'crm_link', 'crm_id')
                 ->get();
 
@@ -773,13 +811,7 @@ class ReportController extends Controller
      */
     public function updateQuantity(Request $request)
     {
-        // Enable detailed error reporting for debugging
-        ini_set('display_errors', 1);
-        error_reporting(E_ALL);
-
         Log::info('=== ICT QUANTITY UPDATE START ===');
-        Log::info('Request data:', $request->all());
-        Log::info('Headers:', $request->headers->all());
 
         try {
             // Check if we're receiving the request

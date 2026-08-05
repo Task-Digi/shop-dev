@@ -26,7 +26,8 @@ class SaleData extends Model
         'product_name',
         'price',
         'retail',
-        'count'
+        'count',
+        'sales_list_id',
 
         // Add other fields as needed
     ];
