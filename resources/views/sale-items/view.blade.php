@@ -68,7 +68,7 @@
                     <table id="sale_items_table" class="table table-sm" style="width:100%">
                         <thead class="thead-light">
                             <tr class="filter-row">
-                                <th><input type="date" id="datepickerFilter" class="form-control col-filter" title="Filter by date"></th>
+                                <th><input type="date" id="datepickerFilter" class="form-control col-filter" value="{{ $initialDate ?? '' }}" title="Filter by date"></th>
                                 <th><select class="form-control col-filter" data-col="location"><option value="">All Location</option></select></th>
                                 <th><select class="form-control col-filter" data-col="type"><option value="">All Type</option></select></th>
                                 <th><select class="form-control col-filter" data-col="payment"><option value="">All Payment</option></select></th>
@@ -565,7 +565,7 @@
                 });
 
                 // Pre-fill from initial URL params if present.
-                var initialDate = @json($initialDate);
+                var initialDate = $('#datepickerFilter').val();
                 if (initialDate) {
                     $('#datepickerFilter').val(initialDate);
                     table.ajax.reload(null, false);
@@ -672,7 +672,7 @@
             });
 
             // If the page was loaded with ?search=, kick off the initial filter.
-            var initialSearch = @json($initialSearch);
+            var initialSearch = ($('#search').val() || '').trim();
             if (initialSearch) {
                 // value already populated in the input via the blade attribute
                 table.ajax.reload(null, false);
