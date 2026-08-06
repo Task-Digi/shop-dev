@@ -656,13 +656,17 @@
                                     '<td style="padding: 4px 8px; text-align: right; vertical-align: middle;">' +
                                     (name.unit_price_avg != null && !isNaN(Number(name.unit_price_avg)) ? formatNumber(Number(name.unit_price_avg)) : '–') + '</td>' +
                                     '<td style="padding: 4px 8px; text-align: right; vertical-align: middle;">' +
-                                    formatNumber(name.total_price) + '</td>' +
+                                    formatNumber(Number(name.mpp_sales || 0)) + '</td>' +
+                                    '<td style="padding: 4px 8px; text-align: right; vertical-align: middle;">' +
+                                    formatNumber(Number(name.fargerike_sales || 0)) + '</td>' +
+                                    '<td style="padding: 4px 8px; text-align: right; vertical-align: middle;">' +
+                                    formatNumber(Number(name.total_price || 0)) + '</td>' +
                                     '</tr>' +
                                     '<tr class="hidden-row2" style="display: none;">' +
-                                    '<td colspan="8"></td>' +
+                                    '<td colspan="10"></td>' +
                                     '</tr>' +
                                     '<tr class="hidden-row2-products" style="display: none;">' +
-                                    '<td colspan="8"></td>' +
+                                    '<td colspan="10"></td>' +
                                     '</tr>';
                             }
                             // Append the customer HTML and skip the redundant <tr> wrapper

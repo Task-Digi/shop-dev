@@ -517,6 +517,8 @@ class ReportController extends Controller
                     DB::raw('COUNT(DISTINCT orderid) AS order_count'),
                     DB::raw('SUM(count) AS product_count'),
                     DB::raw('ROUND(SUM(count * price), 2) AS total_price'),
+                    DB::raw("ROUND(SUM(CASE WHEN type = 'MalProff MPP' THEN count * price ELSE 0 END), 2) AS mpp_sales"),
+                    DB::raw("ROUND(SUM(CASE WHEN type = 'Fargerike' THEN count * price ELSE 0 END), 2) AS fargerike_sales"),
                     DB::raw('ROUND(SUM(count * price) / NULLIF(SUM(count), 0), 2) AS unit_price_avg')
                 )
                 ->where('date', $date);
