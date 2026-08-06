@@ -71,6 +71,12 @@ class ReportController extends Controller
 
     public function index(Request $request, $customerId)
     {
+        $request->validate([
+            'days' => 'nullable|in:0,7,28,56',
+            'per_page' => 'nullable|integer|in:10,25,50,100,200',
+            'search' => 'nullable|string|max:100',
+        ]);
+
         // Get the days filter, defaulting to 7 days
         $days = $request->input('days', 7);
         $search = trim((string) $request->input('search', ''));
@@ -83,10 +89,11 @@ class ReportController extends Controller
         // Initialize the sales data queries
         $salesData1Query = DB::table('sale_data')
             ->select(
+                'customer_id',
                 'customer_name',
                 DB::raw('SUM(count * price) as total_sales')
             )
-            ->groupBy('customer_name')
+            ->groupBy('customer_id', 'customer_name')
             ->orderBy('total_sales', 'DESC');
 
         $salesDataQuery = DB::table('sale_data')
@@ -106,9 +113,9 @@ class ReportController extends Controller
 
         // Period filter (days = 0 means all time)
         if ((string) $days !== '0' && $days != 0) {
-            $dateFrom = now()->subDays((int) $days)->toDateString();
-            $salesData1Query->whereDate('sale_data.date', '>=', $dateFrom);
-            $salesDataQuery->whereDate('sale_data.date', '>=', $dateFrom);
+            $dateFrom = now()->subDays(max(0, (int) $days - 1))->toDateString();
+            $salesData1Query->where('sale_data.date', '>=', $dateFrom);
+            $salesDataQuery->where('sale_data.date', '>=', $dateFrom);
         }
 
         // Search or single-customer route filter
@@ -141,10 +148,7 @@ class ReportController extends Controller
         // fast even with thousands of customers, and so the user gets proper
         // page navigation at the bottom.
         $perPage = (int) $request->input('per_page', 25);
-        if ($perPage <= 0 || $perPage > 200) {
-            $perPage = 25;
-        }
-        $salesData = $salesDataQuery->paginate($perPage)->withQueryString();
+        $salesData = $salesDataQuery->simplePaginate($perPage)->withQueryString();
 
         // Return both salesData and salesData1 to the view, along with search term
         return view('reports.customer', compact('salesData', 'salesData1', 'days', 'search', 'customerId'));
@@ -153,6 +157,20 @@ class ReportController extends Controller
     public function getCustomerReportData(Request $request)
     {
         try {
+            $validator = Validator::make($request->all(), [
+                'location' => 'required|string|max:255',
+                'customer_id' => 'required|string|max:255',
+                'days' => 'required|in:0,7,28,56',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid customer report filters.',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
             // Retrieve inputs
             $location = $request->input('location');
             $customerId = $request->input('customer_id');
@@ -183,12 +201,10 @@ class ReportController extends Controller
             // Add the date filtering condition based on the 'days' variable
             if ($days == 0) {
                 $params = [$location, $customerId]; // No date filter, just location and customer_id
-            } else if ($days !== 'all') {
-                $startDate = now()->subDays($days); // Calculate the start date
+            } else {
+                $startDate = now()->subDays(max(0, (int) $days - 1))->toDateString();
                 $query .= " AND date >= ?";
                 $params = [$location, $customerId, $startDate]; // Add the start date to the parameters
-            } else {
-                $params = [$location, $customerId]; // No date filter, just location and customer_id
             }
 
             // Group and order the results
@@ -204,8 +220,73 @@ class ReportController extends Controller
 
             return response()->json($customerData);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            Log::error('Failed to load customer order drill-down', [
+                'error' => $e->getMessage(),
+                'customer_id' => $request->input('customer_id'),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Unable to load customer orders.'], 500);
         }
+    }
+
+    public function exportCustomers(Request $request)
+    {
+        $request->validate([
+            'days' => 'nullable|in:0,7,28,56',
+            'search' => 'nullable|string|max:100',
+            'customer_id' => 'nullable|string|max:255',
+        ]);
+
+        $days = (string) $request->input('days', '7');
+        $search = trim((string) $request->input('search', ''));
+        $customerId = trim((string) $request->input('customer_id', ''));
+
+        $query = DB::table('sale_data')
+            ->select(
+                'location',
+                'customer_id',
+                'customer_name',
+                DB::raw('COUNT(DISTINCT orderid) as order_count'),
+                DB::raw('SUM(count) as quantity_sold'),
+                $this->weightedUnitPriceAvg(),
+                DB::raw('SUM(count * price) as total_sales')
+            )
+            ->groupBy('location', 'customer_id', 'customer_name')
+            ->orderBy('total_sales', 'DESC');
+
+        if ($days !== '0') {
+            $query->where('date', '>=', now()->subDays(max(0, (int) $days - 1))->toDateString());
+        }
+
+        if ($search !== '') {
+            $like = '%' . addcslashes($search, '%_\\') . '%';
+            $query->where(function ($q) use ($like) {
+                $q->where('customer_name', 'LIKE', $like)
+                    ->orWhere('customer_id', 'LIKE', $like);
+            });
+        } elseif ($customerId !== '' && $customerId !== 'all' && $customerId !== 'CustomerName') {
+            $query->where('customer_id', $customerId);
+        }
+
+        $filename = 'customer-sales-' . now()->format('Y-m-d') . '.csv';
+
+        return response()->streamDownload(function () use ($query) {
+            $output = fopen('php://output', 'w');
+            fputcsv($output, ['Customer ID', 'Customer Name', 'Location', 'Orders', 'Sold', 'Unit Price', 'Total Sales']);
+
+            foreach ($query->cursor() as $row) {
+                fputcsv($output, [
+                    $row->customer_id,
+                    $row->customer_name,
+                    $row->location,
+                    $row->order_count,
+                    $row->quantity_sold,
+                    $row->unit_price_avg,
+                    $row->total_sales,
+                ]);
+            }
+
+            fclose($output);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function reportindex()
@@ -215,6 +296,12 @@ class ReportController extends Controller
 
     public function productIndex(Request $request, $productid)
     {
+        $request->validate([
+            'days' => 'nullable|in:7,30,90,all',
+            'per_page' => 'nullable|integer|in:10,25,50,100,200',
+            'search' => 'nullable|string|max:100',
+        ]);
+
         $days = $request->input('days', 7);
         $searchName = trim((string) $request->input('search', ''));
 
@@ -256,9 +343,9 @@ class ReportController extends Controller
 
         // Apply date filter if 'days' is not set to 'all'
         if ($days !== 'all') {
-            $dateNDaysAgo = now()->subDays((int) $days)->toDateString();
-            $salesDataQuery->whereDate('sale_data.date', '>=', $dateNDaysAgo);
-            $salesData1Query->whereDate('sale_data.date', '>=', $dateNDaysAgo);
+            $dateNDaysAgo = now()->subDays(max(0, (int) $days - 1))->toDateString();
+            $salesDataQuery->where('sale_data.date', '>=', $dateNDaysAgo);
+            $salesData1Query->where('sale_data.date', '>=', $dateNDaysAgo);
         }
 
         // Apply filters based on search text, product id route, or all products
@@ -296,14 +383,67 @@ class ReportController extends Controller
         // thousands of product/location combos. The graph data ($salesData1)
         // is kept as a plain collection for the (collapsed) chart.
         $perPage = (int) $request->input('per_page', 25);
-        if ($perPage <= 0 || $perPage > 200) {
-            $perPage = 25;
-        }
-        $salesData  = $salesDataQuery->paginate($perPage)->withQueryString();
+        $salesData  = $salesDataQuery->simplePaginate($perPage)->withQueryString();
         $salesData1 = $salesData1Query->limit(100)->get();
 
         // Return the view with necessary data
         return view('reports.product', compact('salesData', 'salesData1', 'product_name', 'productid', 'days', 'searchName'));
+    }
+
+    public function exportProducts(Request $request)
+    {
+        $request->validate([
+            'days' => 'nullable|in:7,30,90,all',
+            'search' => 'nullable|string|max:100',
+            'product_id' => 'nullable|string|max:255',
+        ]);
+
+        $days = (string) $request->input('days', '7');
+        $search = trim((string) $request->input('search', ''));
+        $productId = trim((string) $request->input('product_id', ''));
+
+        $query = DB::table('sale_data')
+            ->join('products', 'sale_data.product_id', '=', 'products.product_id')
+            ->select(
+                'sale_data.product_id',
+                $this->resolvedProductNameSelect(),
+                'sale_data.location',
+                DB::raw('COUNT(DISTINCT sale_data.customer_id) AS customer_count'),
+                DB::raw('COUNT(DISTINCT sale_data.orderid) AS order_count'),
+                DB::raw('SUM(sale_data.count) AS quantity_sold'),
+                $this->weightedUnitPriceAvg('sale_data'),
+                DB::raw('SUM(sale_data.count * sale_data.price) AS total_sales')
+            )
+            ->groupBy('sale_data.product_id', 'sale_data.location')
+            ->orderBy('total_sales', 'DESC');
+
+        if ($days !== 'all') {
+            $query->where('sale_data.date', '>=', now()->subDays(max(0, (int) $days - 1))->toDateString());
+        }
+
+        if ($search !== '') {
+            $this->applyProductNameSearch($query, $search);
+        } elseif ($productId !== '' && $productId !== 'all' && $productId !== 'ProductName') {
+            $query->where('sale_data.product_id', $productId);
+        }
+
+        return response()->streamDownload(function () use ($query) {
+            $output = fopen('php://output', 'w');
+            fputcsv($output, ['Product ID', 'Product Name', 'Location', 'Customers', 'Orders', 'Sold', 'Unit Price', 'Total Sales']);
+            foreach ($query->cursor() as $row) {
+                fputcsv($output, [
+                    $row->product_id,
+                    $row->product_name,
+                    $row->location,
+                    $row->customer_count,
+                    $row->order_count,
+                    $row->quantity_sold,
+                    $row->unit_price_avg,
+                    $row->total_sales,
+                ]);
+            }
+            fclose($output);
+        }, 'product-sales-' . now()->format('Y-m-d') . '.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function getSalesData()
@@ -547,23 +687,32 @@ class ReportController extends Controller
     public function updateKsStatus(Request $request)
     {
         try {
-            $customerId = $request->input('customer_id');
-            $ksExists = $request->input('KS_exists');
+            $validator = Validator::make($request->all(), [
+                'customer_id' => 'required|string|max:255|exists:customers,customer_id',
+                'KS_exists' => 'required|in:0,1',
+            ]);
 
-            if (is_null($customerId)) {
-                return response()->json(['success' => false, 'message' => 'Missing customer_id'], 400);
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid KS status request.',
+                    'errors' => $validator->errors(),
+                ], 422);
             }
 
-            // Ensure ksExists is an integer 0 or 1
-            $ksExists = (int) $ksExists;
-            $ksExists = $ksExists === 1 ? 1 : 0;
+            $customerId = (string) $request->input('customer_id');
+            $ksExists = (int) $request->input('KS_exists');
 
             // Update only the customers table as requested
             DB::table('customers')->where('customer_id', $customerId)->update(['KS_exists' => $ksExists]);
 
             return response()->json(['success' => true, 'message' => 'KS status updated successfully']);
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Failed to update KS status: ' . $e->getMessage()], 500);
+            Log::error('Failed to update customer KS status', [
+                'error' => $e->getMessage(),
+                'customer_id' => $request->input('customer_id'),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Unable to update KS status.'], 500);
         }
     }
 
@@ -644,6 +793,20 @@ class ReportController extends Controller
     public function getProductData(Request $request)
     {
         try {
+            $validator = Validator::make($request->all(), [
+                'days' => 'required|in:7,30,90,all',
+                'location' => 'required|string|max:255',
+                'product_id' => 'required|string|max:255',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid product report filters.',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
             // Retrieve input values
             $days = $request->input('days'); // 'days' can be 'all', 7, 30, 90, etc.
             $location = $request->input('location');
@@ -677,7 +840,7 @@ class ReportController extends Controller
             if ($days && $days !== 'all') {
                 // Calculate the date range for last 'days'
                 $endDate = now()->toDateString(); // Today's date
-                $startDate = now()->subDays($days)->toDateString(); // Date 'days' ago
+                $startDate = now()->subDays(max(0, (int) $days - 1))->toDateString();
 
                 // Filter by date range
                 $productDataQuery->whereBetween('sale_data.date', [$startDate, $endDate]);
@@ -695,12 +858,31 @@ class ReportController extends Controller
             // Return the response as JSON
             return response()->json($productData);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            Log::error('Failed to load product drill-down', [
+                'error' => $e->getMessage(),
+                'product_id' => $request->input('product_id'),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Unable to load product sales.'], 500);
         }
     }
 
     public function getProductfinalData(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'date' => 'required|date_format:Y-m-d',
+            'location' => 'required|string|max:255',
+            'productId' => 'required|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid product details request.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
         $date = $request->input('date');
         $location = $request->input('location');
         $productId = $request->input('productId');
@@ -744,30 +926,58 @@ class ReportController extends Controller
         }
 
         return response()->json($rows);
+        } catch (\Exception $e) {
+            Log::error('Failed to load product sale details', [
+                'error' => $e->getMessage(),
+                'product_id' => $request->input('productId'),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Unable to load product details.'], 500);
+        }
     }
 
     public function getCustomerfinalData(Request $request)
     {
-        $customerId = $request->input('customerId');
-        $orderId = $request->input('orderid');
+        $validator = Validator::make($request->all(), [
+            'customerId' => 'required|string|max:255',
+            'orderid' => 'required|string|max:255',
+        ]);
 
-        // Query the sale_data table directly
-        $salesDetails = DB::table('sale_data')
-            ->select(
-                'type',
-                'payment',
-                'customer_id',
-                'product_id',
-                'count',
-                'product_name',
-                'price',
-                DB::raw('ROUND(count * price, 2) AS total_price') // Calculate total price with two decimal places
-            )
-            ->where('customer_id', $customerId)
-            ->where('orderid', $orderId)
-            ->get();
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid order details request.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
 
-        return response()->json($salesDetails);
+        try {
+            $customerId = $request->input('customerId');
+            $orderId = $request->input('orderid');
+
+            $salesDetails = DB::table('sale_data')
+                ->select(
+                    'type',
+                    'payment',
+                    'customer_id',
+                    'product_id',
+                    'count',
+                    'product_name',
+                    'price',
+                    DB::raw('ROUND(count * price, 2) AS total_price')
+                )
+                ->where('customer_id', $customerId)
+                ->where('orderid', $orderId)
+                ->get();
+
+            return response()->json($salesDetails);
+        } catch (\Exception $e) {
+            Log::error('Failed to load customer order items', [
+                'error' => $e->getMessage(),
+                'customer_id' => $request->input('customerId'),
+                'order_id' => $request->input('orderid'),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Unable to load order items.'], 500);
+        }
     }
 
     /**

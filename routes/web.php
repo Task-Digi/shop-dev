@@ -61,12 +61,14 @@ Route::get('/check-product', [ProductController::class, 'check-product'])->name(
 // Graph and Sales Data Routes
 Route::get('/sales-data', [ReportController::class, 'getSalesData'])->name('sales.data');
 Route::get('/sales-data/{customerId}', [ReportController::class, 'getSalesDataCustomer'])->name('sales.data-customer');
+Route::get('/report/products/export', [ReportController::class, 'exportProducts'])->name('report.products.export');
 Route::get('/report/{productid}/product', [ReportController::class, 'productIndex'])->name('product.report');
 
 // Report Routes
 Route::get('/report', [ReportController::class, 'viewIndex'])->name('report');
 Route::get('/Report_view', [ReportController::class, 'reportDashboard'])->name('Report-view');
 Route::get('/report/ks', [ReportController::class, 'ksPage'])->name('report.ks');
+Route::get('/report/customers/export', [ReportController::class, 'exportCustomers'])->name('report.customers.export');
 Route::get('/report/{customerId}', [ReportController::class, 'index'])->name('report-customer');
 
 // ICT Routes

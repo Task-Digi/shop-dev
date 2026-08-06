@@ -19,6 +19,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
         integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 @php
     $activeSearch = trim((string) ($search ?? request('search', '')));
@@ -52,15 +53,16 @@
                     <div class="input-group customer-search-group">
                         <input type="search" name="search" id="customerSearch" class="form-control"
                             value="{{ $activeSearch }}" placeholder="Name or customer ID…" autocomplete="off">
-                        <button type="submit" class="btn btn-primary">Search</button>
-                        <button type="button" id="customerSearchClear" class="btn btn-outline-secondary {{ $activeSearch === '' ? 'd-none' : '' }}">Clear</button>
+                        <button type="submit" class="btn btn-primary" id="customerSearchButton">Search</button>
+                        <button type="button" id="customerSearchClear" data-clear-url="{{ $customerSearchClearUrl }}"
+                            class="btn btn-outline-secondary {{ $activeSearch === '' ? 'd-none' : '' }}">Clear</button>
                     </div>
                 </div>
 
                 <div class="customer-report-filters-row">
                     <label for="days" class="form-label customer-report-label">Period</label>
                     <select name="days" id="days" class="form-select form-select-sm customer-days-select"
-                        onchange="document.getElementById('customerReportFilters').submit()">
+                        onchange="document.getElementById('customerReportFilters').requestSubmit()">
                         <option value="7" {{ (string) $days === '7' ? 'selected' : '' }}>Last 7 days</option>
                         <option value="28" {{ (string) $days === '28' ? 'selected' : '' }}>Last 28 days</option>
                         <option value="56" {{ (string) $days === '56' ? 'selected' : '' }}>Last 56 days</option>
@@ -70,6 +72,13 @@
             </form>
 
             <div class="customer-report-actions">
+                <a href="{{ route('report.customers.export', array_filter([
+                    'days' => $days,
+                    'search' => $activeSearch !== '' ? $activeSearch : null,
+                    'customer_id' => !in_array($routeCustomerId, ['all', 'CustomerName'], true) ? $routeCustomerId : null,
+                ], fn ($value) => $value !== null && $value !== '')) }}" class="btn btn-outline-success">
+                    Export CSV
+                </a>
                 <a href="{{ route('report-customer', array_merge(['customerId' => 'all'], $reportBaseParams)) }}"
                     class="btn btn-outline-primary {{ ($routeCustomerId === 'all' || $routeCustomerId === 'CustomerName') && $activeSearch === '' ? 'active' : '' }}">
                     All Customers
@@ -101,6 +110,7 @@
 
     <div class="card border-0 shadow-none customer-report-table-card">
         <div class="card-body pt-0">
+            <div id="customerReportStatus" class="alert py-2" role="status" style="display:none;"></div>
             <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 customer-table-tools">
                 <span class="small text-muted">Click a row to expand sales by date.</span>
                 <div class="d-flex align-items-center gap-2">
@@ -126,7 +136,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach ($salesData as $sale)
+                        @forelse ($salesData as $sale)
                         <tr class="mobile-row" data-date="">
                             <td class="col-customer" data-customer_id="{{ $sale->customer_id }}">{{ $sale->customer_name }} @if(($sale->KS_exists ?? 0) == 1)
                                 <span class="badge badge-pill badge-danger">KS</span>
@@ -141,19 +151,37 @@
                         </tr>
                         <tr class="hidden-row2" style="display: none;color:green">
                         </tr>
-                        @endforeach
+                        @empty
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                <strong>No customers found.</strong><br>
+                                Try another search or period.
+                            </td>
+                        </tr>
+                        @endforelse
 
                     </tbody>
                 </table>
             </div>
 
             {{-- Pagination footer: results info on the left, page buttons on the right. --}}
-            @if($salesData->total() > 0)
+            @if($salesData->count() > 0 && (!$salesData->onFirstPage() || $salesData->hasMorePages()))
             <div class="report-pagination-wrap">
                 <div class="results-info">
-                    Showing {{ $salesData->firstItem() ?? 0 }} to {{ $salesData->lastItem() ?? 0 }} of {{ $salesData->total() }} customers
+                    Page {{ $salesData->currentPage() }} - {{ $salesData->count() }} customers shown
                 </div>
-                {{ $salesData->onEachSide(1)->links('vendor.pagination.buttons-only') }}
+                <div class="btn-group" role="navigation" aria-label="Customer report pagination">
+                    @if($salesData->onFirstPage())
+                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled>Previous</button>
+                    @else
+                        <a href="{{ $salesData->previousPageUrl() }}" class="btn btn-sm btn-outline-secondary" rel="prev">Previous</a>
+                    @endif
+                    @if($salesData->hasMorePages())
+                        <a href="{{ $salesData->nextPageUrl() }}" class="btn btn-sm btn-outline-secondary" rel="next">Next</a>
+                    @else
+                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled>Next</button>
+                    @endif
+                </div>
             </div>
             @endif
         </div>
@@ -173,6 +201,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
 </script> --}}
 
 
+<script type="application/json" id="customerChartData">{!! json_encode($salesData1, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
 <script>
     // "Rows per page" selector — reload the current URL with the new size
     // while preserving the existing search/days query params.
@@ -192,7 +221,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
         var clearBtn = document.getElementById('customerSearchClear');
         if (!input || !clearBtn) return;
 
-        var clearUrl = @json($customerSearchClearUrl);
+        var clearUrl = clearBtn.dataset.clearUrl;
 
         function toggleClearVisibility() {
             clearBtn.classList.toggle('d-none', input.value.trim() === '');
@@ -207,10 +236,17 @@ document.getElementById('searchInput').value = ''; // Clear search input
             window.location.href = clearUrl;
         });
     })();
+
+    document.getElementById('customerReportFilters').addEventListener('submit', function() {
+        var button = document.getElementById('customerSearchButton');
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Loading...';
+        }
+    });
 </script>
 <script>
     var ajaxInProgress = false;
-    // console.log("nanban");
     // Use jQuery instead of $ to avoid conflicts with other libraries
     // jQuery(document).ready(function($) {
 
@@ -309,8 +345,11 @@ document.getElementById('searchInput').value = ''; // Clear search input
         const itemsPerPage = 10; // Adjust as needed
 
         // Initial dataset setup
-        const salesData1 = @json($salesData1);
-        const labels = salesData1.map(item => item.customer_name); // Customer names for x-axis
+        const salesData1 = JSON.parse(document.getElementById('customerChartData').textContent || '[]');
+        const labels = salesData1.map(item => {
+            const name = item.customer_name || 'Unknown customer';
+            return item.customer_id ? `${name} (${item.customer_id})` : name;
+        });
         const sales = salesData1.map(item => Number(item.total_sales)); // Total sales for each customer
 
         function paginateData(data, page, perPage) {
@@ -334,12 +373,16 @@ document.getElementById('searchInput').value = ''; // Clear search input
 
         function calculateTrendline(data) {
             const n = data.length;
+            if (n === 0) return [];
+            if (n === 1) return [data[0]];
             const sumX = data.reduce((acc, val, idx) => acc + idx, 0);
             const sumY = data.reduce((acc, val) => acc + val, 0);
             const sumXY = data.reduce((acc, val, idx) => acc + idx * val, 0);
             const sumX2 = data.reduce((acc, val, idx) => acc + idx * idx, 0);
 
-            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const denominator = n * sumX2 - sumX * sumX;
+            if (denominator === 0) return data.slice();
+            const slope = (n * sumXY - sumX * sumY) / denominator;
             const intercept = (sumY - slope * sumX) / n;
 
             return data.map((val, idx) => slope * idx + intercept);
@@ -424,7 +467,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    return `Total Sales: $${context.raw.toFixed(2)}`;
+                                    return `Total Sales: ${Number(context.raw).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                                 }
                             }
                         }
@@ -453,30 +496,51 @@ document.getElementById('searchInput').value = ''; // Clear search input
     });
 </script>
 <script>
-    $(document).on('click', '.mobile-row', function() {
-        // console.log("gdgdgdg")
+    function showCustomerReportStatus(message, type) {
+        var status = document.getElementById('customerReportStatus');
+        if (!status) return;
+        status.className = 'alert py-2 alert-' + (type || 'info');
+        status.textContent = message;
+        status.style.display = 'block';
+    }
 
+    function hideCustomerReportStatus() {
+        var status = document.getElementById('customerReportStatus');
+        if (status) status.style.display = 'none';
+    }
+
+    function escapeCustomerHtml(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    $(document).on('click', '.mobile-row', function() {
         if (ajaxInProgress) {
             return;
         };
 
         ajaxInProgress = true;
 
-        $('.customer-details-row').remove();
-        $('.customer-details-lastRow').hide();
-
         // var date = $(this).data('date');
         var location = $(this).find('td[data-location]').data('location');
-        // console.log(location,"location");
         var customerId = $(this).find('td[data-customer_id]').data('customer_id');
         var hiddenRow = $(this).next('.hidden-row2');
+        var requestKey = String(customerId) + '|' + String(location);
 
         // Hide all other hidden rows
         $('.hidden-row2 ').not(hiddenRow).hide().removeClass('loaded');
 
-        var isHiddenRowVisible = sessionStorage.getItem('hiddenRowVisible2') == customerId;
+        var isHiddenRowVisible = sessionStorage.getItem('hiddenRowVisible2') === requestKey;
 
         if (!isHiddenRowVisible) {
+            hideCustomerReportStatus();
+            $('.customer-details-row, .customer-details-lastRow, .hidden-row3').remove();
+            hiddenRow.html('<td colspan="7" class="text-center text-muted py-3">Loading customer orders...</td>').show();
             $.ajax({
                 url: '/CustomerReport/details',
                 method: 'GET',
@@ -487,7 +551,6 @@ document.getElementById('searchInput').value = ''; // Clear search input
                     days: '{{ $days }}'
                 },
                 success: function(response) {
-                    console.log(response, "response");
                     hiddenRow.siblings('.customer-details-row').each(function() {
                         var $next = $(this).next('tr');
                         if ($next.hasClass('hidden-row3')) {
@@ -498,18 +561,15 @@ document.getElementById('searchInput').value = ''; // Clear search input
 
                     // Append each customer's details as individual rows
                     var orderRowsHtml = '';
+                    if (!Array.isArray(response) || response.length === 0) {
+                        hiddenRow.html('<td colspan="7" class="text-center text-muted py-3">No orders found for this customer and period.</td>').show();
+                        sessionStorage.setItem('hiddenRowVisible2', requestKey);
+                        return;
+                    }
+
                     response.forEach(function(customer) {
-                        console.log(customer, "customer");
                         if (!customer) return;
 
-                        function escapeHtml(text) {
-                            if (text == null || text === '') return '';
-                            return String(text)
-                                .replace(/&/g, '&amp;')
-                                .replace(/</g, '&lt;')
-                                .replace(/>/g, '&gt;')
-                                .replace(/"/g, '&quot;');
-                        }
                         function formatDate(dateString) {
                             const date = new Date(dateString);
                             if (isNaN(date))
@@ -527,40 +587,46 @@ document.getElementById('searchInput').value = ''; // Clear search input
                             });
                         }
                         function orderRefCell(orderid) {
-                            var oid = escapeHtml(String(orderid));
+                            var oid = escapeCustomerHtml(orderid);
                             return '<span>Order ' + oid + '</span>';
                         }
+                        var safeOrderId = escapeCustomerHtml(customer.orderid);
+                        var safeCustomerId = escapeCustomerHtml(customerId);
+                        var safeCustomerName = escapeCustomerHtml(customer.customer_name);
                         orderRowsHtml +=
                             '<tr class="customer-details-row alert alert-primary" data-orderid="' +
-                            customer.orderid +
-                            '" data-customerid="' + customerId +
-                            '" data-name="' + customer.customer_name +
+                            safeOrderId +
+                            '" data-customerid="' + safeCustomerId +
+                            '" data-name="' + safeCustomerName +
                             '">' +
-                            '<td class="col-customer"><h6>' + customer.customer_id + '</h6></td>' +
-                            '<td class="col-date"><h6>' + formatDate(customer.sales_date) + '</h6></td>' +
-                            '<td class="col-location"><h6>' + customer.location + '</h6></td>' +
+                            '<td class="col-customer"><h6>' + escapeCustomerHtml(customer.customer_id) + '</h6></td>' +
+                            '<td class="col-date"><h6>' + escapeCustomerHtml(formatDate(customer.sales_date)) + '</h6></td>' +
+                            '<td class="col-location"><h6>' + escapeCustomerHtml(customer.location) + '</h6></td>' +
                             '<td class="col-num text-right"><h6>' + orderRefCell(customer.orderid) + '</h6></td>' +
                             '<td class="col-num text-right"><h6>' + customer.total_products_sold + '</h6></td>' +
                             '<td class="col-price text-right"><h6>' + formatMoney(customer.unit_price) + '</h6></td>' +
-                            '<td class="col-sum text-right"><h6>' + customer.total_sales + '</h6></td>' +
+                            '<td class="col-sum text-right"><h6>' + formatMoney(customer.total_sales) + '</h6></td>' +
                             '</tr>' +
                             '<tr class="hidden-row3" style="display: none; color: yellow;"></tr>';
                     });
                     hiddenRow.after(orderRowsHtml);
 
                     // Mark hiddenRow as loaded
-                    hiddenRow.addClass('loaded').show();
-                    sessionStorage.setItem('hiddenRowVisible2', customerId);
-                    ajaxInProgress = false;
+                    hiddenRow.empty().addClass('loaded').hide();
+                    sessionStorage.setItem('hiddenRowVisible2', requestKey);
                 },
-                error: function(xhr, status, error) {
-                    console.error(error);
+                error: function() {
+                    hiddenRow.html('<td colspan="7" class="text-center text-danger py-3">Unable to load customer orders. Click the customer row to retry.</td>').show();
+                    showCustomerReportStatus('Unable to load customer orders. Please retry.', 'danger');
+                    sessionStorage.setItem('hiddenRowVisible2', '');
+                },
+                complete: function() {
                     ajaxInProgress = false;
                 }
             });
         } else {
-            console.log("loaded2-remove")
-            hiddenRow.toggle();
+            $('.customer-details-row, .customer-details-lastRow, .hidden-row3').remove();
+            hiddenRow.empty().hide();
             sessionStorage.setItem('hiddenRowVisible2', '');
             ajaxInProgress = false;
         }
@@ -578,7 +644,6 @@ document.getElementById('searchInput').value = ''; // Clear search input
         var customerName = $(this).data('name');
         var hiddenRow = $(this).next('.hidden-row3');
 
-        console.log(customerId, orderid, "rrrr")
         // Hide all other hidden rows
         $('.hidden-row3 ').not(hiddenRow).hide().removeClass('loaded');
 
@@ -586,7 +651,8 @@ document.getElementById('searchInput').value = ''; // Clear search input
 
         // Check if details for hidden-row3 are already loaded
         if (!isHiddenRowVisible) {
-            console.log('loaded3')
+            ajaxInProgress = true;
+            hiddenRow.html('<td colspan="7" class="text-center text-muted py-3">Loading order items...</td>').show();
             $.ajax({
                 url: '/customer/finaldetails',
                 method: 'GET',
@@ -599,46 +665,54 @@ document.getElementById('searchInput').value = ''; // Clear search input
                     // Remove any existing customer details rows
                     hiddenRow.siblings('.customer-details-lastRow').remove();
 
+                    if (!Array.isArray(response) || response.length === 0) {
+                        hiddenRow.html('<td colspan="7" class="text-center text-muted py-3">No products found for this order.</td>').show();
+                        sessionStorage.setItem('hiddenRowVisible3', orderid);
+                        return;
+                    }
+
                     response.forEach(function(customer) {
 
                         if (customer) {
                             function formatNumber(number) {
-                                return number.toLocaleString('en-US', {
+                                var value = Number(number);
+                                if (!Number.isFinite(value)) return '-';
+                                return value.toLocaleString('en-US', {
                                     minimumFractionDigits: 2,
                                     maximumFractionDigits: 2
                                 });
                             }
-                            console.log("no data", customer);
                             var customerHtml =
                                 '<tr class="customer-details-lastRow alert alert-success">' +
                                 '<td class="col-customer"><h6></h6></td>' +
                                 '<td class="col-date"><h6></h6></td>' +
-                                '<td class="col-location"><h6>product -- ' + customer.product_name + '</h6></td>' +
-                                '<td class="col-num text-right"><h6>id -- ' + customer.product_id + '</h6></td>' +
+                                '<td class="col-location"><h6>Product - ' + escapeCustomerHtml(customer.product_name) + '</h6></td>' +
+                                '<td class="col-num text-right"><h6>ID - ' + escapeCustomerHtml(customer.product_id) + '</h6></td>' +
                                 '<td class="col-num text-right"><h6>' + formatNumber(customer.count) + '</h6></td>' +
                                 '<td class="col-price text-right"><h6>' + formatNumber(customer.price) + '</h6></td>' +
                                 '<td class="col-sum text-right"><h6>' + formatNumber(customer.total_price) + '</h6></td>' +
                                 '</tr>';
 
                             hiddenRow.after(customerHtml);
-                        } else {
-                            console.log("no data");
                         }
                     });
 
                     // Mark hiddenRow as loaded
-                    hiddenRow.addClass('loaded').show();
+                    hiddenRow.empty().addClass('loaded').hide();
                     sessionStorage.setItem('hiddenRowVisible3', orderid);
-                    ajaxInProgress = false;
                 },
-                error: function(xhr, status, error) {
-                    console.error(error);
+                error: function() {
+                    hiddenRow.html('<td colspan="7" class="text-center text-danger py-3">Unable to load order items. Click the order row to retry.</td>').show();
+                    showCustomerReportStatus('Unable to load order items. Please retry.', 'danger');
+                    sessionStorage.setItem('hiddenRowVisible3', '');
+                },
+                complete: function() {
                     ajaxInProgress = false;
                 }
             });
         } else {
-            console.log('Hidden row is already loaded3. Toggling visibility.');
-            hiddenRow.toggle();
+            $('.customer-details-lastRow').remove();
+            hiddenRow.empty().hide();
             sessionStorage.setItem('hiddenRowVisible3', '');
             ajaxInProgress = false;
         }
@@ -862,12 +936,14 @@ document.getElementById('searchInput').value = ''; // Clear search input
 
         ksButtons.forEach(button => {
             button.addEventListener('click', function() {
+                const clickedButton = this;
                 const customerId = this.getAttribute('data-customer-id');
                 const customerName = this.getAttribute('data-customer-name');
                 const currentStatus = parseInt(this.getAttribute('data-ks-status'));
 
                 // Toggle the status (0 to 1, or 1 to 0)
                 const newStatus = currentStatus === 0 ? 1 : 0;
+                clickedButton.disabled = true;
 
                 // Send AJAX request to update the database
                 fetch('/update-ks-status', {
@@ -881,22 +957,32 @@ document.getElementById('searchInput').value = ''; // Clear search input
                             KS_exists: newStatus
                         })
                     })
-                    .then(response => response.json())
-                    .then(data => {
+                    .then(response => response.json().then(data => ({ ok: response.ok, data })))
+                    .then(result => {
+                        const data = result.data;
+                        if (!result.ok) throw new Error(data.message || 'Unable to update KS status.');
                         if (data.success) {
                             // Update the button status and color
                             this.setAttribute('data-ks-status', newStatus);
                             this.classList.remove('ks-inactive', 'ks-active');
                             this.classList.add(newStatus === 1 ? 'ks-active' : 'ks-inactive');
 
-                            console.log('KS status updated successfully for customer: ' + customerName);
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'KS status updated',
+                                text: customerName || String(customerId),
+                                timer: 1400,
+                                showConfirmButton: false
+                            });
                         } else {
-                            alert('Error updating KS status: ' + (data.message || 'Unknown error'));
+                            throw new Error(data.message || 'Unable to update KS status.');
                         }
                     })
                     .catch(error => {
-                        console.error('Error:', error);
-                        alert('Error updating KS status');
+                        Swal.fire('Update failed', error.message || 'Unable to update KS status.', 'error');
+                    })
+                    .finally(() => {
+                        clickedButton.disabled = false;
                     });
             });
         });

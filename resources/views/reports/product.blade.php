@@ -37,6 +37,7 @@
             fn ($v) => $v !== null && $v !== ''
         )
     ));
+    $routeProductId = $productid ?? request()->route('productid');
 @endphp
 
 <div class="card product-report-page">
@@ -53,15 +54,16 @@
                     <div class="input-group product-search-group">
                         <input type="search" name="search" id="productSearch" class="form-control"
                             value="{{ $activeSearch }}" placeholder="Name or product ID…" autocomplete="off">
-                        <button type="submit" class="btn btn-primary">Search</button>
-                        <button type="button" id="productSearchClear" class="btn btn-outline-secondary {{ $activeSearch === '' ? 'd-none' : '' }}">Clear</button>
+                        <button type="submit" class="btn btn-primary" id="productSearchButton">Search</button>
+                        <button type="button" id="productSearchClear" data-clear-url="{{ $productSearchClearUrl }}"
+                            class="btn btn-outline-secondary {{ $activeSearch === '' ? 'd-none' : '' }}">Clear</button>
                     </div>
                 </div>
 
                 <div class="product-report-filters-row">
                     <label for="days" class="form-label product-report-label">Period</label>
                     <select name="days" id="days" class="form-select form-select-sm product-days-select"
-                        onchange="document.getElementById('productReportFilters').submit()">
+                        onchange="document.getElementById('productReportFilters').requestSubmit()">
                         <option value="7" {{ (string) $days === '7' ? 'selected' : '' }}>Last 7 days</option>
                         <option value="30" {{ (string) $days === '30' ? 'selected' : '' }}>Last 30 days</option>
                         <option value="90" {{ (string) $days === '90' ? 'selected' : '' }}>Last 90 days</option>
@@ -71,6 +73,11 @@
             </form>
 
             <div class="product-report-actions">
+                <a href="{{ route('report.products.export', array_filter([
+                    'days' => $days,
+                    'search' => $activeSearch !== '' ? $activeSearch : null,
+                    'product_id' => !in_array($routeProductId, ['all', 'ProductName'], true) ? $routeProductId : null,
+                ], fn ($value) => $value !== null && $value !== '')) }}" class="btn btn-outline-success">Export CSV</a>
                 <a href="{{ route('product.report', array_merge(['productid' => 'all'], $reportBaseParams)) }}"
                     class="btn btn-outline-primary {{ $productid === 'all' && $activeSearch === '' ? 'active' : '' }}">
                     All Products
@@ -102,6 +109,7 @@
 
     <div class="card border-0 shadow-none product-report-table-card">
         <div class="card-body pt-0">
+            <div id="productReportStatus" class="alert py-2" role="status" style="display:none;"></div>
             <div class="d-flex flex-wrap align-items-center justify-content-between mb-3 product-table-tools">
                 <span class="small text-muted">Click a row to expand sales by date.</span>
                 <div class="d-flex align-items-center gap-2">
@@ -128,7 +136,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach ($salesData as $sale)
+                        @forelse ($salesData as $sale)
                         <tr class="mobile-row" data-date="">
                             <td data-product_id="{{ $sale->product_id }}">{{ $sale->product_name }}</td>
                             <td></td>
@@ -146,18 +154,31 @@
                         </tr>
                         <tr class="hidden-row2" style="display: none;color:green">
                         </tr>
-                        @endforeach
+                        @empty
+                        <tr><td colspan="8" class="text-center text-muted py-5"><strong>No products found.</strong><br>Try another search or period.</td></tr>
+                        @endforelse
                     </tbody>
                 </table>
             </div>
 
             {{-- Pagination footer: results info on the left, page buttons on the right. --}}
-            @if($salesData->total() > 0)
+            @if($salesData->count() > 0 && (!$salesData->onFirstPage() || $salesData->hasMorePages()))
             <div class="report-pagination-wrap">
                 <div class="results-info">
-                    Showing {{ $salesData->firstItem() ?? 0 }} to {{ $salesData->lastItem() ?? 0 }} of {{ $salesData->total() }} products
+                    Page {{ $salesData->currentPage() }} - {{ $salesData->count() }} products shown
                 </div>
-                {{ $salesData->onEachSide(1)->links('vendor.pagination.buttons-only') }}
+                <div class="btn-group" role="navigation" aria-label="Product report pagination">
+                    @if($salesData->onFirstPage())
+                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled>Previous</button>
+                    @else
+                        <a href="{{ $salesData->previousPageUrl() }}" class="btn btn-sm btn-outline-secondary" rel="prev">Previous</a>
+                    @endif
+                    @if($salesData->hasMorePages())
+                        <a href="{{ $salesData->nextPageUrl() }}" class="btn btn-sm btn-outline-secondary" rel="next">Next</a>
+                    @else
+                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled>Next</button>
+                    @endif
+                </div>
             </div>
             @endif
         </div>
@@ -341,7 +362,7 @@
         var clearBtn = document.getElementById('productSearchClear');
         if (!input || !clearBtn) return;
 
-        var clearUrl = @json($productSearchClearUrl);
+        var clearUrl = clearBtn.dataset.clearUrl;
 
         function toggleClearVisibility() {
             clearBtn.classList.toggle('d-none', input.value.trim() === '');
@@ -356,39 +377,55 @@
             window.location.href = clearUrl;
         });
     })();
+
+    document.getElementById('productReportFilters').addEventListener('submit', function() {
+        var button = document.getElementById('productSearchButton');
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Loading...';
+        }
+    });
 </script>
 <script>
-    $(document).on('click', '.mobile-row', function() {
-        // console.log("gdgdgdg")
+    function showProductReportStatus(message, type) {
+        var status = document.getElementById('productReportStatus');
+        if (!status) return;
+        status.className = 'alert py-2 alert-' + (type || 'info');
+        status.textContent = message;
+        status.style.display = 'block';
+    }
 
+    function escapeProductHtml(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    $(document).on('click', '.mobile-row', function() {
         if (ajaxInProgress) {
             return;
         };
 
         ajaxInProgress = true;
 
-        $('.customer-details-row').each(function() {
-            var $next = $(this).next('tr');
-            if ($next.hasClass('hidden-row3')) {
-                $next.remove();
-            }
-        });
-        $('.customer-details-row').remove();
-        $('.customer-details-lastRow').remove();
-
         // var date = $(this).data('date');
         var location = $(this).find('td[data-location]').data('location');
-        // console.log(location, "location");
         var product_id = $(this).find('td[data-product_id]').data('product_id');
         var hiddenRow = $(this).next('.hidden-row2');
+        var requestKey = String(product_id) + '|' + String(location);
 
         // Hide all other hidden rows
         $('.hidden-row2 ').not(hiddenRow).hide().removeClass('loaded');
 
-        var isHiddenRowVisible = sessionStorage.getItem('hiddenRowVisible2') == product_id;
+        var isHiddenRowVisible = sessionStorage.getItem('hiddenRowVisible2') === requestKey;
 
-        // console.log()
         if (!isHiddenRowVisible) {
+            $('.customer-details-row, .customer-details-lastRow, .hidden-row3').remove();
+            hiddenRow.html('<td colspan="8" class="text-center text-muted py-3">Loading product sales...</td>').show();
             $.ajax({
                 url: '/product/details',
                 method: 'GET',
@@ -416,17 +453,22 @@
                     }
 
                     var rowsHtml = '';
+                    if (!Array.isArray(response) || response.length === 0) {
+                        hiddenRow.html('<td colspan="8" class="text-center text-muted py-3">No sales found for this product and period.</td>').show();
+                        sessionStorage.setItem('hiddenRowVisible2', requestKey);
+                        return;
+                    }
                     response.forEach(function(product) {
                         if (!product) return;
                         rowsHtml +=
                             '<tr class="customer-details-row alert alert-primary" data-date="' +
-                            product.date +
-                            '" data-product_id="' + product_id +
-                            '" data-location="' + product.location +
+                            escapeProductHtml(product.date) +
+                            '" data-product_id="' + escapeProductHtml(product_id) +
+                            '" data-location="' + escapeProductHtml(product.location) +
                             '">' +
-                            '<td><h6>' + (product.product_name || product.product_id || '–') + '</h6></td>' +
-                            '<td><h6>' + formatDate(product.date) + '</h6></td>' +
-                            '<td><h6>' + product.location + '</h6></td>' +
+                            '<td><h6>' + escapeProductHtml(product.product_name || product.product_id || '-') + '</h6></td>' +
+                            '<td><h6>' + escapeProductHtml(formatDate(product.date)) + '</h6></td>' +
+                            '<td><h6>' + escapeProductHtml(product.location) + '</h6></td>' +
                             '<td><h6>' + product.customer_count + '</h6></td>' +
                             '<td><h6>' + (product.order_id_count) + '</h6></td>' +
                             '<td><h6>' + Number(product.product_quantity_sold).toLocaleString('en-US', {
@@ -440,18 +482,21 @@
                     hiddenRow.after(rowsHtml);
 
                     // Mark hiddenRow as loaded
-                    hiddenRow.addClass('loaded').show();
-                    sessionStorage.setItem('hiddenRowVisible2', product_id);
-                    ajaxInProgress = false;
+                    hiddenRow.empty().addClass('loaded').hide();
+                    sessionStorage.setItem('hiddenRowVisible2', requestKey);
                 },
-                error: function(xhr, status, error) {
-                    console.error(error);
+                error: function() {
+                    hiddenRow.html('<td colspan="8" class="text-center text-danger py-3">Unable to load product sales. Click the product row to retry.</td>').show();
+                    showProductReportStatus('Unable to load product sales. Please retry.', 'danger');
+                    sessionStorage.setItem('hiddenRowVisible2', '');
+                },
+                complete: function() {
                     ajaxInProgress = false;
                 }
             });
         } else {
-            //  console.log("loaded2-remove")
-            hiddenRow.toggle();
+            $('.customer-details-row, .customer-details-lastRow, .hidden-row3').remove();
+            hiddenRow.empty().hide();
             sessionStorage.setItem('hiddenRowVisible2', '');
             ajaxInProgress = false;
         }
@@ -467,15 +512,17 @@
         var productId = $(this).data('product_id');
         var location = $(this).data('location');
         var hiddenRow = $(this).next('.hidden-row3');
+        var detailKey = String(productId) + '|' + String(date) + '|' + String(location);
 
         // Hide all other hidden rows
         $('.hidden-row3 ').not(hiddenRow).hide().removeClass('loaded');
 
-        var isHiddenRowVisible = sessionStorage.getItem('hiddenRowVisible3') == productId;
+        var isHiddenRowVisible = sessionStorage.getItem('hiddenRowVisible3') === detailKey;
 
         // Check if details for hidden-row3 are already loaded
         if (!isHiddenRowVisible) {
-            console.log(location, 'location')
+            ajaxInProgress = true;
+            hiddenRow.html('<td colspan="8" class="text-center text-muted py-3">Loading sale details...</td>').show();
             $.ajax({
                 url: '/product/finaldetails',
                 method: 'GET',
@@ -537,6 +584,11 @@
                     }
 
                     var rowsHtml = '';
+                    if (!Array.isArray(response) || response.length === 0) {
+                        hiddenRow.html('<td colspan="8" class="text-center text-muted py-3">No sale details found.</td>').show();
+                        sessionStorage.setItem('hiddenRowVisible3', detailKey);
+                        return;
+                    }
                     response.forEach(function(product) {
                         if (!product) return;
                         rowsHtml +=
@@ -556,23 +608,27 @@
                     hiddenRow.after(rowsHtml);
 
                     // Mark hiddenRow as loaded
-                    hiddenRow.addClass('loaded').show();
-                    sessionStorage.setItem('hiddenRowVisible3', productId);
-                    ajaxInProgress = false;
+                    hiddenRow.empty().addClass('loaded').hide();
+                    sessionStorage.setItem('hiddenRowVisible3', detailKey);
                 },
-                error: function(xhr, status, error) {
-                    console.error(error);
+                error: function() {
+                    hiddenRow.html('<td colspan="8" class="text-center text-danger py-3">Unable to load sale details. Click the row to retry.</td>').show();
+                    showProductReportStatus('Unable to load product sale details. Please retry.', 'danger');
+                    sessionStorage.setItem('hiddenRowVisible3', '');
+                },
+                complete: function() {
                     ajaxInProgress = false;
                 }
             });
         } else {
-            console.log('Hidden row is already loaded3. Toggling visibility.');
-            hiddenRow.toggle();
+            $('.customer-details-lastRow').remove();
+            hiddenRow.empty().hide();
             sessionStorage.setItem('hiddenRowVisible3', '');
             ajaxInProgress = false;
         }
     });
 </script>
+<script type="application/json" id="productChartData">{!! json_encode($salesData1, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
 <script>
     var ajaxInProgress = false;
     // Use jQuery instead of $ to avoid conflicts with other libraries
@@ -583,7 +639,7 @@
         // Chart series: sort by total sales (high → low) so the x-order matches "rank by
         // revenue". A regression on alphabetical order is usually flat at the mean (looks
         // "broken"); rank order gives a meaningful downward trendline for comparison.
-        const salesDataRaw = @json($salesData1);
+        const salesDataRaw = JSON.parse(document.getElementById('productChartData').textContent || '[]');
         const salesData = Array.isArray(salesDataRaw) ?
             salesDataRaw.slice().sort(function(a, b) {
                 return Number(b.total_sales) - Number(a.total_sales);
