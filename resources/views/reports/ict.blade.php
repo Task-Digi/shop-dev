@@ -244,6 +244,7 @@
                                             class="form-control form-control-sm quantity-input"
                                             id="qty-input-{{ $ict->id }}"
                                             data-ean="{{ $ict->ean_code_base }}"
+                                            data-confirmed-value="{{ $ict->qty ?? 0 }}"
                                             value="{{ $ict->qty ?? 0 }}"
                                             min="0"
                                             onchange="updateQuantityDirect({{ $ict->id }})"
@@ -325,6 +326,11 @@
 
         // Function to update quantity using +/- buttons
         function updateQuantity(id, change) {
+            const timerKey = String(id);
+            if (typingTimers.has(timerKey)) {
+                clearTimeout(typingTimers.get(timerKey));
+                typingTimers.delete(timerKey);
+            }
             const input = document.getElementById(`qty-input-${id}`);
             let currentValue = parseInt(input.value) || 0;
             let newValue = currentValue + change;
@@ -343,6 +349,11 @@
 
         // Function to update quantity when manually changed in input field
         function updateQuantityDirect(id) {
+            const timerKey = String(id);
+            if (typingTimers.has(timerKey)) {
+                clearTimeout(typingTimers.get(timerKey));
+                typingTimers.delete(timerKey);
+            }
             const input = document.getElementById(`qty-input-${id}`);
             let newValue = parseInt(input.value);
 
@@ -364,7 +375,7 @@
 
             // Store original value for error recovery
             if (!originalValues.has(id)) {
-                originalValues.set(id, parseInt(input.value));
+                originalValues.set(id, parseInt(input.dataset.confirmedValue || '0'));
             }
 
             // Show loading status and disable inputs
@@ -397,6 +408,7 @@
                 .then(data => {
                     if (data.success) {
                         showStatus(id, 'Saved', 'success');
+                        input.dataset.confirmedValue = String(quantity);
                         // Clear original value on success
                         originalValues.delete(id);
 
@@ -434,6 +446,7 @@
                 const id = input.id.replace('qty-input-', '');
                 if (id != skipId) {
                     input.value = quantity;
+                    input.dataset.confirmedValue = String(quantity);
                     // Visual feedback
                     input.classList.add('bg-success', 'text-white');
                     setTimeout(() => {

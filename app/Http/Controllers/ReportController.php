@@ -449,7 +449,7 @@ class ReportController extends Controller
     public function getSalesData()
     {
         // Calculate the date 50 days ago
-        $dateFiftyDaysAgo = now()->subDays(30)->toDateString();
+        $dateFiftyDaysAgo = now()->subDays(29)->toDateString();
 
         // Query to get the sales data
         $salesData = DB::table('sales_lists')
@@ -465,7 +465,7 @@ class ReportController extends Controller
 
     public function getSalesDataCustomer($customerId)
     {
-        $dateFiftyDaysAgo = now()->subDays(30)->toDateString();
+        $dateFiftyDaysAgo = now()->subDays(29)->toDateString();
         // Query to get the sales data
         $salesData = DB::table('sales_lists')
             ->select(DB::raw('date, SUM(count * price) as total_sales'))
@@ -528,7 +528,7 @@ class ReportController extends Controller
             $days = null;
         } elseif ($days && $days !== 'all') {
             // If $days is provided and not 'all', filter by the range of days
-            $dateNDaysAgo = now()->subDays((int)$days)->toDateString();
+            $dateNDaysAgo = now()->subDays(max(0, (int) $days - 1))->toDateString();
             $salesDataQuery->where('date', '>=', $dateNDaysAgo);
             $salesData1Query->where('date', '>=', $dateNDaysAgo);
         }
@@ -600,7 +600,7 @@ class ReportController extends Controller
         }
 
         if ($days !== null && $days !== '' && $days !== 'all') {
-            $dateNDaysAgo = now()->subDays((int) $days)->toDateString();
+            $dateNDaysAgo = now()->subDays(max(0, (int) $days - 1))->toDateString();
             $start = \Carbon\Carbon::parse($dateNDaysAgo)->startOfDay();
             $end = now()->startOfDay();
 

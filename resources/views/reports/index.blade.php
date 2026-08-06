@@ -6,15 +6,6 @@
     <!-- Include jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-    <!-- Include jQuery UI (Datepicker) -->
-    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
-
-    <!-- DataTables CSS -->
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.24/css/jquery.dataTables.min.css">
-
-    <!-- DataTables JS -->
-    <script type="text/javascript" src="https://cdn.datatables.net/1.10.24/js/jquery.dataTables.min.js"></script>
-
     <!-- Bootstrap JavaScript -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
         integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
@@ -128,10 +119,10 @@
             </select>
 
             <input type="date" name="searchDate" id="searchDate" value="{{ request()->input('searchDate') }}"
-                class="form-control mx-2" onchange="handleDateChange()">
+                class="form-control mx-2" onchange="handleDateChange()" aria-label="Select a sales date">
             <a href="{{ route('report') }}" class="btn btn-outline-secondary">Clear</a>
         </form>
-        <div id="dailySalesLoading" class="alert alert-info py-2 mt-2 mb-0" role="status" style="display:none;">
+        <div id="dailySalesLoading" class="alert alert-info py-2 mt-2 mb-0" role="status" aria-live="polite" style="display:none;">
             Loading sales report...
         </div>
         <small class="text-muted d-block mt-2">
@@ -161,7 +152,7 @@
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table id="Reporttable" class="table table-sm table-hover">
+                <table id="Reporttable" class="table table-sm table-hover" aria-label="Daily sales transactions">
                     <thead>
                         <tr>
                             <th>Sales.Date</th>
@@ -296,7 +287,6 @@
 
 <script>
     var ajaxInProgress = false;
-    //console.log("nanban");
     // Use jQuery instead of $ to avoid conflicts with other libraries
     jQuery(document).ready(function($) {
 
@@ -539,26 +529,17 @@
 
             ajaxInProgress = true;
 
-            $('.customer-details-row').remove();
-            $('.customer-details-lastRow').remove();
-            $('.hidden-row1').remove();
-
             var date = $(this).data('date');
             var location = $(this).children('td').eq(1).text().trim();
             var drillDownKey = date + '|' + location;
-            // console.log(date, "date");
-            var hiddenRow = $(this).siblings('.hidden-row1');
             var clickedRow = $(this); // Store reference to the clicked row
-
-
-            if (!hiddenRow.length) {
-                hiddenRow = $('<tr class="hidden-row"></tr>').insertAfter(clickedRow);
-            }
+            var hiddenRow = clickedRow.nextAll('.hidden-row').first();
 
             var isHiddenRowVisible = sessionStorage.getItem('hiddenRowVisible') === drillDownKey;
             var customer_name = @json($customer_name);
             if (!isHiddenRowVisible && !customer_name) {
-                console.log(!hiddenRow.hasClass('loaded'), "tttttt")
+                $('.hidden-row1, .hidden-row2, .hidden-row2-products, .customer-details-row, .customer-details-lastRow').remove();
+                hiddenRow.html('<td colspan="10" class="text-center text-muted py-3">Loading customer sales...</td>').show();
 
                 $.ajax({
                     url: '/customers/' + date,
@@ -567,6 +548,11 @@
                         location: location
                     },
                     success: function(response) {
+                        if (!Array.isArray(response) || response.length === 0) {
+                            hiddenRow.html('<td colspan="10" class="text-center text-muted py-3">No customer sales found for this date and location.</td>').show();
+                            sessionStorage.setItem('hiddenRowVisible', drillDownKey);
+                            return;
+                        }
                         // Sort response array based on customer_name in ascending order
                         response.sort(function(a, b) {
                             var nameA = (a.customer_name || '')
@@ -592,7 +578,6 @@
                                 .toFixed(2);
                             var customerHtml =
                                 ''; // Initialize variable to store HTML for each customer row
-                            // console.log(name, date);
 
                             function formatNumber(number) {
                                 return number.toLocaleString('en-US', {
@@ -622,14 +607,12 @@
                                     '<td></td><td></td>' +
                                     '<td style="padding: 4px 8px; vertical-align: middle;">' +
                                     '<a href="report/' + name.customer_id +
-                                    '" onclick="handleCustomerGraphClick(' +
-                                    name.customer_id + ')" target="_blank" style="text-decoration: underline; color: #007bff; font-weight: 500;">' +
+                                    '" target="_blank" rel="noopener" style="text-decoration: underline; color: #007bff; font-weight: 500;">' +
                                     name.customer_id + '</a>' +
                                     '</td>' +
                                     '<td class="extract-products-cell" title="Click to view products" style="cursor: pointer; padding: 4px 8px; vertical-align: middle;">' +
                                     '<a href="report/' + name.customer_id +
-                                    '" onclick="handleCustomerGraphClick(' +
-                                    name.customer_id + ')" target="_blank" style="text-decoration: underline; color: #007bff; font-weight: 500; font-size: 14px;">' +
+                                    '" target="_blank" rel="noopener" style="text-decoration: underline; color: #007bff; font-weight: 500; font-size: 14px;">' +
                                     name.customer_name + '</a>' +
 
                                     '<i class="fa fa-pencil crm-edit-icon" ' +
@@ -673,32 +656,26 @@
                             customerRowsHtml += customerHtml;
                         });
 
-                        if (!customerRowsHtml) {
-                            customerRowsHtml = '<tr>' +
-                                '<td colspan="6"><h6>customer not found</h6></td>' +
-                                '</tr>';
-                        }
-
                         // Insert the hidden rows below the clicked row
                         $('.hidden-row').not(hiddenRow).remove();
                         $(customerRowsHtml).insertAfter(
                             clickedRow); // Use the clickedRow reference here
 
                         // Mark hidden row as loaded and show it
-                        hiddenRow.addClass('loaded').show();
+                        hiddenRow.empty().addClass('loaded').hide();
                         sessionStorage.setItem('hiddenRowVisible', drillDownKey);
-                        ajaxInProgress = false;
                     },
-                    error: function(xhr, status, error) {
-                        console.error(error);
+                    error: function() {
+                        hiddenRow.html('<td colspan="10" class="text-center text-danger py-3">Unable to load customer sales. Click the row to retry.</td>').show();
+                        sessionStorage.setItem('hiddenRowVisible', '');
+                    },
+                    complete: function() {
                         ajaxInProgress = false;
                     }
                 });
             } else {
-                // Hide the hidden row
-                // Toggle the visibility of the hidden row
-                console.log('Hidden row is already loaded. Toggling visibility.');
-                hiddenRow.toggle();
+                $('.hidden-row1, .hidden-row2, .hidden-row2-products, .customer-details-row, .customer-details-lastRow').remove();
+                hiddenRow.empty().hide();
                 sessionStorage.setItem('hiddenRowVisible', '');
                 ajaxInProgress = false;
             }
@@ -754,7 +731,11 @@
                     $('#modalOverlay').hide();
                 },
                 error: function() {
-                    alert('Failed to update CRM ID.');
+                    $('#dailySalesLoading')
+                        .removeClass('alert-info alert-success')
+                        .addClass('alert-danger')
+                        .text('Unable to update the CRM ID. Please try again.')
+                        .show();
                 }
             });
         });
@@ -789,6 +770,7 @@
 
             if (!isHiddenRowVisible) {
                 ajaxInProgress = true;
+                hiddenRow.html('<td colspan="10" class="text-center text-muted py-3">Loading customer products...</td>').show();
                 $.ajax({
                     url: '/customer/products-by-date',
                     method: 'GET',
@@ -800,6 +782,12 @@
                     success: function(response) {
                         // Remove any existing products generated below this row
                         hiddenRow.siblings('.customer-products-row').remove();
+
+                        if (!Array.isArray(response) || response.length === 0) {
+                            hiddenRow.html('<td colspan="10" class="text-center text-muted py-3">No products found for this customer.</td>').show();
+                            sessionStorage.setItem('hiddenRowVisible2Products', customerId);
+                            return;
+                        }
 
                         response.forEach(function(product) {
                             if (product) {
@@ -825,13 +813,15 @@
                             }
                         });
 
-                        hiddenRow.addClass('loaded').show();
+                        hiddenRow.empty().addClass('loaded').hide();
                         sessionStorage.setItem('hiddenRowVisible2Products', customerId);
                         sessionStorage.setItem('hiddenRowVisible2', ''); // clear orders cache since we closed them
-                        ajaxInProgress = false;
                     },
-                    error: function(xhr, status, error) {
-                        console.error(error);
+                    error: function() {
+                        hiddenRow.html('<td colspan="10" class="text-center text-danger py-3">Unable to load customer products. Click the row to retry.</td>').show();
+                        sessionStorage.setItem('hiddenRowVisible2Products', '');
+                    },
+                    complete: function() {
                         ajaxInProgress = false;
                     }
                 });
@@ -863,7 +853,8 @@
 
             // Check if details for hidden-row2 are already loaded
             if (!isHiddenRowVisible) {
-                console.log("loaded2")
+                ajaxInProgress = true;
+                hiddenRow.html('<td colspan="10" class="text-center text-muted py-3">Loading customer orders...</td>').show();
                 $.ajax({
                     url: '/customer/details',
                     method: 'GET',
@@ -875,6 +866,12 @@
                     success: function(response) {
                         // Remove any existing customer details rows
                         hiddenRow.siblings('.customer-details-row').remove();
+
+                        if (!Array.isArray(response) || response.length === 0) {
+                            hiddenRow.html('<td colspan="10" class="text-center text-muted py-3">No orders found for this customer.</td>').show();
+                            sessionStorage.setItem('hiddenRowVisible2', customerId);
+                            return;
+                        }
 
                         // Append each customer's details as individual rows
                         response.forEach(function(customer) {
@@ -916,18 +913,20 @@
                         });
 
                         // Mark hiddenRow as loaded
-                        hiddenRow.addClass('loaded').show();
+                        hiddenRow.empty().addClass('loaded').hide();
                         sessionStorage.setItem('hiddenRowVisible2', customerId);
-                        ajaxInProgress = false;
                     },
-                    error: function(xhr, status, error) {
-                        console.error(error);
+                    error: function() {
+                        hiddenRow.html('<td colspan="10" class="text-center text-danger py-3">Unable to load customer orders. Click the row to retry.</td>').show();
+                        sessionStorage.setItem('hiddenRowVisible2', '');
+                    },
+                    complete: function() {
                         ajaxInProgress = false;
                     }
                 });
             } else {
-                console.log("loaded2-remove")
-                hiddenRow.toggle();
+                $('.customer-details-row, .customer-details-lastRow, .hidden-row3').remove();
+                hiddenRow.empty().hide();
                 sessionStorage.setItem('hiddenRowVisible2', '');
                 ajaxInProgress = false;
             }
@@ -946,7 +945,6 @@
             var customerName = $(this).data('name');
             var hiddenRow = $(this).next('.hidden-row3');
 
-            console.log(customerId, orderid, "rrrr")
             // Hide all other hidden rows
             $('.hidden-row3 ').not(hiddenRow).hide().removeClass('loaded');
 
@@ -954,7 +952,8 @@
 
             // Check if details for hidden-row3 are already loaded
             if (!isHiddenRowVisible) {
-                console.log('loaded3')
+                ajaxInProgress = true;
+                hiddenRow.html('<td colspan="10" class="text-center text-muted py-3">Loading order items...</td>').show();
                 $.ajax({
                     url: '/customer/finaldetails',
                     method: 'GET',
@@ -967,6 +966,12 @@
                         // Remove any existing customer details rows
                         hiddenRow.siblings('.customer-details-lastRow').remove();
 
+                        if (!Array.isArray(response) || response.length === 0) {
+                            hiddenRow.html('<td colspan="10" class="text-center text-muted py-3">No products found for this order.</td>').show();
+                            sessionStorage.setItem('hiddenRowVisible3', orderid);
+                            return;
+                        }
+
                         response.forEach(function(customer) {
 
                             if (customer) {
@@ -976,7 +981,6 @@
                                         maximumFractionDigits: 2
                                     });
                                 }
-                                console.log("no data", customer);
                                 var customerHtml =
                                     '<tr class="customer-details-lastRow alert alert-success">' +
                                     '<td><h6>' + '' + '</h6></td>' +
@@ -998,51 +1002,30 @@
                                     '</tr>';
 
                                 hiddenRow.after(customerHtml);
-                            } else {
-                                console.log("no data");
                             }
                         });
 
                         // Mark hiddenRow as loaded
-                        hiddenRow.addClass('loaded').show();
+                        hiddenRow.empty().addClass('loaded').hide();
                         sessionStorage.setItem('hiddenRowVisible3', orderid);
-                        ajaxInProgress = false;
                     },
-                    error: function(xhr, status, error) {
-                        console.error(error);
+                    error: function() {
+                        hiddenRow.html('<td colspan="10" class="text-center text-danger py-3">Unable to load order items. Click the row to retry.</td>').show();
+                        sessionStorage.setItem('hiddenRowVisible3', '');
+                    },
+                    complete: function() {
                         ajaxInProgress = false;
                     }
                 });
             } else {
-                console.log('Hidden row is already loaded3. Toggling visibility.');
-                hiddenRow.toggle();
+                $('.customer-details-lastRow').remove();
+                hiddenRow.empty().hide();
                 sessionStorage.setItem('hiddenRowVisible3', '');
                 ajaxInProgress = false;
             }
         });
 
     });
-
-
-    function handleCustomerGraphClick(customerId) {
-        console.log("it is clicked")
-        // Define the URL with the customer ID
-        var url = '/report/' + customerId;
-
-        $.ajax({
-            url: url,
-            method: 'POST',
-            success: function(data) {
-                console.log(data, "data")
-
-
-            },
-            error: function(xhr, status, error) {
-                console.error('Failed to fetch sales data:', error);
-            }
-        });
-
-    }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.10.2/dist/umd/popper.min.js"
     integrity="sha384-7+zCNj/IqJ95wo16oMtfsKbZ9ccEh31eOz1HGyDuCQ6wgnyJNSYdrPa03rtR1zdB" crossorigin="anonymous">

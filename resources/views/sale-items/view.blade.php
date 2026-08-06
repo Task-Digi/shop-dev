@@ -21,7 +21,7 @@
     </head>
     @include('layouts.nav_bar')
     <div class="sold-registry-container">
-        <h4>Sale Item dashboard </h4>
+        <h4>Sold Registry</h4>
 
         <div class="top-actions mb-3">
             <form action="{{ route('download.csv') }}" method="GET" class="d-inline-block">
@@ -47,15 +47,16 @@
                 </ul>
             </div>
         @endif
-        <div id="registryFeedback" class="alert mb-3" role="status" style="display:none;"></div>
-        <small id="activeFilterSummary" class="text-muted d-block mb-2">No active filters</small>
+        <div id="registryFeedback" class="alert mb-3" role="status" aria-live="polite" style="display:none;"></div>
+        <small id="activeFilterSummary" class="text-muted d-block mb-2" aria-live="polite">No active filters</small>
         <div class="row">
             <div class="col-12">
                 <form method="GET" action="{{ route('saleitems.datasearch') }}" class="mb-3" id="soldRegistrySearchForm" onsubmit="return false;">
                     <div class="input-group">
                         <input type="text" name="search" id="search" class="form-control"
-                            placeholder="Search by Date, Location, Payment etc." value="{{ $initialSearch ?? '' }}" autocomplete="off">
-                        <div id="searchResults" class="dropdown-menu w-100" style="max-height: 240px; overflow-y: auto;"></div>
+                            placeholder="Search by Date, Location, Payment etc." value="{{ $initialSearch ?? '' }}" autocomplete="off"
+                            aria-label="Search sold registry" aria-controls="sale_items_table searchResults">
+                        <div id="searchResults" class="dropdown-menu w-100" role="listbox" aria-label="Search suggestions" style="max-height: 240px; overflow-y: auto;"></div>
                         <div class="input-group-append">
                             <button type="button" id="globalSearchBtn" class="btn btn-primary">Search</button>
                         </div>
@@ -65,13 +66,13 @@
             <div class="col-12">
                 <div class="table-card">
                 <div class="table-responsive">
-                    <table id="sale_items_table" class="table table-sm" style="width:100%">
+                    <table id="sale_items_table" class="table table-sm" style="width:100%" aria-label="Sold registry records">
                         <thead class="thead-light">
                             <tr class="filter-row">
-                                <th><input type="date" id="datepickerFilter" class="form-control col-filter" value="{{ $initialDate ?? '' }}" title="Filter by date"></th>
-                                <th><select class="form-control col-filter" data-col="location"><option value="">All Location</option></select></th>
-                                <th><select class="form-control col-filter" data-col="type"><option value="">All Type</option></select></th>
-                                <th><select class="form-control col-filter" data-col="payment"><option value="">All Payment</option></select></th>
+                                <th><input type="date" id="datepickerFilter" class="form-control col-filter" value="{{ $initialDate ?? '' }}" title="Filter by date" aria-label="Filter by date"></th>
+                                <th><select class="form-control col-filter" data-col="location" aria-label="Filter by location"><option value="">All Location</option></select></th>
+                                <th><select class="form-control col-filter" data-col="type" aria-label="Filter by type"><option value="">All Type</option></select></th>
+                                <th><select class="form-control col-filter" data-col="payment" aria-label="Filter by payment"><option value="">All Payment</option></select></th>
                                 <th><input type="text" class="form-control col-filter" data-col="customer_id" placeholder="All CustomerID"></th>
                                 <th><input type="text" class="form-control col-filter" data-col="customer_name" placeholder="All CustomerName"></th>
                                 <th><input type="text" class="form-control col-filter" data-col="orderid" placeholder="All OrderID"></th>
@@ -668,6 +669,7 @@
                         $(this).val('');
                     }
                 });
+                window.history.replaceState({}, '', window.location.pathname);
                 table.search('').order([[0, 'desc']]).ajax.reload(null, false);
             });
 
