@@ -69,6 +69,20 @@ class ReportController extends Controller
         });
     }
 
+    /**
+     * Latest distinct dates containing sales. Fetching the values first keeps
+     * this compatible with MariaDB versions that reject LIMIT in an IN subquery.
+     */
+    protected function latestSalesDates(int $count)
+    {
+        return DB::table('sale_data')
+            ->select('date')
+            ->distinct()
+            ->orderBy('date', 'DESC')
+            ->limit($count)
+            ->pluck('date');
+    }
+
     public function index(Request $request, $customerId)
     {
         $request->validate([
@@ -111,11 +125,12 @@ class ReportController extends Controller
             ->groupBy('sale_data.location', 'sale_data.customer_id', 'sale_data.customer_name', 'customers.KS_exists')
             ->orderBy('total_sales', 'DESC');
 
-        // Period filter (days = 0 means all time)
+        // Period filter (days = 0 means all time). Otherwise use the latest
+        // distinct dates containing sales, not calendar days with gaps.
         if ((string) $days !== '0' && $days != 0) {
-            $dateFrom = now()->subDays(max(0, (int) $days - 1))->toDateString();
-            $salesData1Query->where('sale_data.date', '>=', $dateFrom);
-            $salesDataQuery->where('sale_data.date', '>=', $dateFrom);
+            $latestSalesDates = $this->latestSalesDates((int) $days);
+            $salesData1Query->whereIn('sale_data.date', $latestSalesDates);
+            $salesDataQuery->whereIn('sale_data.date', $latestSalesDates);
         }
 
         // Search or single-customer route filter
@@ -148,7 +163,7 @@ class ReportController extends Controller
         // fast even with thousands of customers, and so the user gets proper
         // page navigation at the bottom.
         $perPage = (int) $request->input('per_page', 25);
-        $salesData = $salesDataQuery->simplePaginate($perPage)->withQueryString();
+        $salesData = $salesDataQuery->paginate($perPage)->withQueryString();
 
         // Return both salesData and salesData1 to the view, along with search term
         return view('reports.customer', compact('salesData', 'salesData1', 'days', 'search', 'customerId'));
@@ -254,7 +269,7 @@ class ReportController extends Controller
             ->orderBy('total_sales', 'DESC');
 
         if ($days !== '0') {
-            $query->where('date', '>=', now()->subDays(max(0, (int) $days - 1))->toDateString());
+            $query->whereIn('date', $this->latestSalesDates((int) $days));
         }
 
         if ($search !== '') {
@@ -269,8 +284,13 @@ class ReportController extends Controller
 
         $filename = 'customer-sales-' . now()->format('Y-m-d') . '.csv';
 
-        return response()->streamDownload(function () use ($query) {
+        $periodLabel = $days === '0' ? 'All time' : "Last {$days} sales days";
+
+        return response()->streamDownload(function () use ($query, $periodLabel, $search) {
             $output = fopen('php://output', 'w');
+            fputcsv($output, ['Period', $periodLabel]);
+            fputcsv($output, ['Search', $search !== '' ? $search : 'All customers']);
+            fputcsv($output, []);
             fputcsv($output, ['Customer ID', 'Customer Name', 'Location', 'Orders', 'Sold', 'Unit Price', 'Total Sales']);
 
             foreach ($query->cursor() as $row) {
@@ -297,7 +317,7 @@ class ReportController extends Controller
     public function productIndex(Request $request, $productid)
     {
         $request->validate([
-            'days' => 'nullable|in:7,30,90,all',
+            'days' => 'nullable|in:7,28,56,all',
             'per_page' => 'nullable|integer|in:10,25,50,100,200',
             'search' => 'nullable|string|max:100',
         ]);
@@ -341,11 +361,11 @@ class ReportController extends Controller
             ->groupBy('sale_data.product_id')
             ->orderBy('product_name', 'ASC');
 
-        // Apply date filter if 'days' is not set to 'all'
+        // Apply the latest distinct sales-date filter if not set to all time.
         if ($days !== 'all') {
-            $dateNDaysAgo = now()->subDays(max(0, (int) $days - 1))->toDateString();
-            $salesDataQuery->where('sale_data.date', '>=', $dateNDaysAgo);
-            $salesData1Query->where('sale_data.date', '>=', $dateNDaysAgo);
+            $latestSalesDates = $this->latestSalesDates((int) $days);
+            $salesDataQuery->whereIn('sale_data.date', $latestSalesDates);
+            $salesData1Query->whereIn('sale_data.date', $latestSalesDates);
         }
 
         // Apply filters based on search text, product id route, or all products
@@ -383,7 +403,7 @@ class ReportController extends Controller
         // thousands of product/location combos. The graph data ($salesData1)
         // is kept as a plain collection for the (collapsed) chart.
         $perPage = (int) $request->input('per_page', 25);
-        $salesData  = $salesDataQuery->simplePaginate($perPage)->withQueryString();
+        $salesData  = $salesDataQuery->paginate($perPage)->withQueryString();
         $salesData1 = $salesData1Query->limit(100)->get();
 
         // Return the view with necessary data
@@ -393,7 +413,7 @@ class ReportController extends Controller
     public function exportProducts(Request $request)
     {
         $request->validate([
-            'days' => 'nullable|in:7,30,90,all',
+            'days' => 'nullable|in:7,28,56,all',
             'search' => 'nullable|string|max:100',
             'product_id' => 'nullable|string|max:255',
         ]);
@@ -418,7 +438,7 @@ class ReportController extends Controller
             ->orderBy('total_sales', 'DESC');
 
         if ($days !== 'all') {
-            $query->where('sale_data.date', '>=', now()->subDays(max(0, (int) $days - 1))->toDateString());
+            $query->whereIn('sale_data.date', $this->latestSalesDates((int) $days));
         }
 
         if ($search !== '') {
@@ -427,8 +447,13 @@ class ReportController extends Controller
             $query->where('sale_data.product_id', $productId);
         }
 
-        return response()->streamDownload(function () use ($query) {
+        $periodLabel = $days === 'all' ? 'All time' : "Last {$days} sales days";
+
+        return response()->streamDownload(function () use ($query, $periodLabel, $search) {
             $output = fopen('php://output', 'w');
+            fputcsv($output, ['Period', $periodLabel]);
+            fputcsv($output, ['Search', $search !== '' ? $search : 'All products']);
+            fputcsv($output, []);
             fputcsv($output, ['Product ID', 'Product Name', 'Location', 'Customers', 'Orders', 'Sold', 'Unit Price', 'Total Sales']);
             foreach ($query->cursor() as $row) {
                 fputcsv($output, [
@@ -481,6 +506,12 @@ class ReportController extends Controller
 
     public function viewIndex(Request $request)
     {
+        $request->validate([
+            'days' => 'nullable|in:7,28,56,all',
+            'searchDate' => 'nullable|date_format:Y-m-d',
+            'per_page' => 'nullable|integer|in:25,50,100',
+        ]);
+
         // Get the 'days' and 'searchDate' values from the request
         $days = $request->input('days', 7); // Default to 7 days if no selection is provided
         $searchDate = $request->input('searchDate');
@@ -527,17 +558,22 @@ class ReportController extends Controller
             $salesData1Query->where('date', $searchDate);
             $days = null;
         } elseif ($days && $days !== 'all') {
-            // If $days is provided and not 'all', filter by the range of days
-            $dateNDaysAgo = now()->subDays(max(0, (int) $days - 1))->toDateString();
-            $salesDataQuery->where('date', '>=', $dateNDaysAgo);
-            $salesData1Query->where('date', '>=', $dateNDaysAgo);
+            // "Last N days" means the latest N distinct dates that actually
+            // contain sales, rather than N calendar dates with empty days omitted.
+            $salesDayCount = (int) $days;
+            // Resolve this small list first because older MariaDB versions do
+            // not support LIMIT inside an IN subquery.
+            $latestSalesDates = $this->latestSalesDates($salesDayCount);
+
+            $salesDataQuery->whereIn('date', $latestSalesDates);
+            $salesData1Query->whereIn('date', $latestSalesDates);
         }
         // No filter applied for 'all' days selection, as it fetches all records
 
         // Keep the drill-down table bounded. The selected filters and page size
         // remain in the URL while the user moves through the result pages.
         $salesData = $salesDataQuery
-            ->simplePaginate($perPage)
+            ->paginate($perPage)
             ->withQueryString();
 
         // An all-time daily chart can create a very large JSON/DOM payload. The
@@ -573,9 +609,7 @@ class ReportController extends Controller
     }
 
     /**
-     * Build one row per calendar day so the graph matches the selected date range,
-     * missing days use 0, and JS can compute rolling averages and a linear trend on
-     * the same numbers the bars use.
+     * Build the graph series from the selected sales dates so it matches the table.
      *
      * @param  \Illuminate\Support\Collection<int, object>  $salesData1
      * @return array{labels: string[], values: float[]}
@@ -600,14 +634,9 @@ class ReportController extends Controller
         }
 
         if ($days !== null && $days !== '' && $days !== 'all') {
-            $dateNDaysAgo = now()->subDays(max(0, (int) $days - 1))->toDateString();
-            $start = \Carbon\Carbon::parse($dateNDaysAgo)->startOfDay();
-            $end = now()->startOfDay();
-
-            for ($d = $start->copy(); $d->lte($end); $d->addDay()) {
-                $ds = $d->toDateString();
-                $labels[] = $ds;
-                $values[] = $salesMap[$ds] ?? 0.0;
+            foreach ($salesData1 as $row) {
+                $labels[] = \Carbon\Carbon::parse($row->date)->toDateString();
+                $values[] = (float) $row->total_sales;
             }
 
             return ['labels' => $labels, 'values' => $values];
@@ -794,7 +823,7 @@ class ReportController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'days' => 'required|in:7,30,90,all',
+                'days' => 'required|in:7,28,56,all',
                 'location' => 'required|string|max:255',
                 'product_id' => 'required|string|max:255',
             ]);
@@ -808,7 +837,7 @@ class ReportController extends Controller
             }
 
             // Retrieve input values
-            $days = $request->input('days'); // 'days' can be 'all', 7, 30, 90, etc.
+            $days = $request->input('days');
             $location = $request->input('location');
             $product_id = $request->input('product_id');
 
@@ -836,14 +865,9 @@ class ReportController extends Controller
                 $productDataQuery->where('sale_data.product_id', $product_id);
             }
 
-            // Calculate the date range based on the 'days' input
+            // Use the same distinct sales-day period as the parent report.
             if ($days && $days !== 'all') {
-                // Calculate the date range for last 'days'
-                $endDate = now()->toDateString(); // Today's date
-                $startDate = now()->subDays(max(0, (int) $days - 1))->toDateString();
-
-                // Filter by date range
-                $productDataQuery->whereBetween('sale_data.date', [$startDate, $endDate]);
+                $productDataQuery->whereIn('sale_data.date', $this->latestSalesDates((int) $days));
             }
 
             // Group by date, location, and product_id (not product_name) to avoid duplicate drill-down rows

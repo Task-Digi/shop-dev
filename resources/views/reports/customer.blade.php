@@ -14,7 +14,7 @@
 </head>
 @php
     $activeSearch = trim((string) ($search ?? request('search', '')));
-    $daysLabel = ((string) $days === '0' || $days == 0) ? 'All time' : 'Last ' . $days . ' days';
+    $daysLabel = ((string) $days === '0' || $days == 0) ? 'All time' : 'Last ' . $days . ' sales days';
     $reportBaseParams = array_filter([
         'days' => $days,
         'per_page' => request('per_page'),
@@ -54,9 +54,9 @@
                     <label for="days" class="form-label customer-report-label">Period</label>
                     <select name="days" id="days" class="form-select form-select-sm customer-days-select"
                         onchange="document.getElementById('customerReportFilters').requestSubmit()">
-                        <option value="7" {{ (string) $days === '7' ? 'selected' : '' }}>Last 7 days</option>
-                        <option value="28" {{ (string) $days === '28' ? 'selected' : '' }}>Last 28 days</option>
-                        <option value="56" {{ (string) $days === '56' ? 'selected' : '' }}>Last 56 days</option>
+                        <option value="7" {{ (string) $days === '7' ? 'selected' : '' }}>Last 7 sales days</option>
+                        <option value="28" {{ (string) $days === '28' ? 'selected' : '' }}>Last 28 sales days</option>
+                        <option value="56" {{ (string) $days === '56' ? 'selected' : '' }}>Last 56 sales days</option>
                         <option value="0" {{ (string) $days === '0' || $days == 0 ? 'selected' : '' }}>All time</option>
                     </select>
                 </div>
@@ -155,26 +155,7 @@
                 </table>
             </div>
 
-            {{-- Pagination footer: results info on the left, page buttons on the right. --}}
-            @if($salesData->count() > 0 && (!$salesData->onFirstPage() || $salesData->hasMorePages()))
-            <div class="report-pagination-wrap">
-                <div class="results-info">
-                    Page {{ $salesData->currentPage() }} - {{ $salesData->count() }} customers shown
-                </div>
-                <div class="btn-group" role="navigation" aria-label="Customer report pagination">
-                    @if($salesData->onFirstPage())
-                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled>Previous</button>
-                    @else
-                        <a href="{{ $salesData->previousPageUrl() }}" class="btn btn-sm btn-outline-secondary" rel="prev">Previous</a>
-                    @endif
-                    @if($salesData->hasMorePages())
-                        <a href="{{ $salesData->nextPageUrl() }}" class="btn btn-sm btn-outline-secondary" rel="next">Next</a>
-                    @else
-                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled>Next</button>
-                    @endif
-                </div>
-            </div>
-            @endif
+            <x-report-pagination :paginator="$salesData" item-label="customers" aria-label="Customer report pages" />
         </div>
     </div>
 </div>

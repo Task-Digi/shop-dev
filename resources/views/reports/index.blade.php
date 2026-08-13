@@ -112,9 +112,9 @@
             <label for="days">Select days:</label>
             <select name="days" id="days" class="form-control" onchange="handleDaysChange()">
                 <option value="" disabled {{ is_null($days) ? 'selected' : '' }}>Select days</option>
-                <option value="7" {{ $days == 7 ? 'selected' : '' }}>Last 7 days</option>
-                <option value="28" {{ $days == 28 ? 'selected' : '' }}>Last 28 days</option>
-                <option value="56" {{ $days == 56 ? 'selected' : '' }}>Last 56 days</option>
+                <option value="7" {{ $days == 7 ? 'selected' : '' }}>Last 7 sales days</option>
+                <option value="28" {{ $days == 28 ? 'selected' : '' }}>Last 28 sales days</option>
+                <option value="56" {{ $days == 56 ? 'selected' : '' }}>Last 56 sales days</option>
                 <option value="all" {{ $days == 'all' ? 'selected' : '' }}>All Days</option>
             </select>
 
@@ -132,7 +132,7 @@
             @elseif ($days === 'all')
                 All days
             @else
-                Last {{ $days }} days
+                Last {{ $days }} sales days
             @endif
         </small>
     </div>
@@ -145,7 +145,7 @@
             @if ($searchDate)
                 Transactions for {{ \Carbon\Carbon::parse($searchDate)->format('d.m.Y') }}
             @elseif ($days && $days !== 'all')
-                Transactions of Last {{ $days }} Days
+                Transactions of Last {{ $days }} Sales Days
             @else
                 Transactions (all days)
             @endif
@@ -209,32 +209,7 @@
                     </tbody>
                 </table>
 
-                @if ($salesData->onFirstPage() && !$salesData->hasMorePages())
-                    @if ($salesData->count() > 0)
-                        <small class="text-muted d-block mt-3">
-                            Showing all {{ $salesData->count() }} rows
-                        </small>
-                    @endif
-                @else
-                    <div class="d-flex flex-wrap justify-content-between align-items-center mt-3">
-                        <small class="text-muted mb-2">
-                            Page {{ $salesData->currentPage() }} ({{ $salesData->count() }} rows shown)
-                        </small>
-                        <div class="btn-group mb-2" role="navigation" aria-label="Daily Sales pagination">
-                            @if ($salesData->onFirstPage())
-                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled>Previous</button>
-                            @else
-                                <a class="btn btn-sm btn-outline-secondary" href="{{ $salesData->previousPageUrl() }}" rel="prev">Previous</a>
-                            @endif
-
-                            @if ($salesData->hasMorePages())
-                                <a class="btn btn-sm btn-outline-secondary" href="{{ $salesData->nextPageUrl() }}" rel="next">Next</a>
-                            @else
-                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled>Next</button>
-                            @endif
-                        </div>
-                    </div>
-                @endif
+                <x-report-pagination :paginator="$salesData" item-label="rows" aria-label="Daily Sales pages" />
 
                 <div id="crmModal" class="modal"
                     style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);

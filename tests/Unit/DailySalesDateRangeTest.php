@@ -16,16 +16,19 @@ class DailySalesDateRangeTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_last_seven_days_contains_exactly_seven_calendar_dates(): void
+    public function test_last_seven_days_contains_only_dates_with_sales(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-06 12:00:00'));
         $method = new ReflectionMethod(ReportController::class, 'buildDailySalesChartSeries');
         $method->setAccessible(true);
 
-        $series = $method->invoke(new ReportController(), null, 7, new Collection());
+        $sales = new Collection([
+            (object) ['date' => '2026-08-01', 'total_sales' => 100.0],
+            (object) ['date' => '2026-08-03', 'total_sales' => 250.0],
+        ]);
+        $series = $method->invoke(new ReportController(), null, 7, $sales);
 
-        $this->assertCount(7, $series['labels']);
-        $this->assertSame('2026-07-31', $series['labels'][0]);
-        $this->assertSame('2026-08-06', $series['labels'][6]);
+        $this->assertSame(['2026-08-01', '2026-08-03'], $series['labels']);
+        $this->assertSame([100.0, 250.0], $series['values']);
     }
 }
