@@ -26,14 +26,18 @@ class CustomerReportValidationTest extends TestCase
                     && $params[1] === '10363';
             })
             ->andReturn([
-                (object) ['orderid' => '740043', 'sales_date' => '2026-08-21'],
-                (object) ['orderid' => '729862', 'sales_date' => '2026-08-18'],
+                (object) ['orderid' => '740043', 'sales_date' => '2026-08-21', 'total_products_sold' => 3],
+                (object) ['orderid' => '739344', 'sales_date' => '2026-08-21', 'total_products_sold' => 7],
+                (object) ['orderid' => '729862', 'sales_date' => '2026-08-18', 'total_products_sold' => 2],
             ]);
 
         $this->getJson('/CustomerReport/details?location=MAJORSTUEN&customer_id=10363&days=0')
             ->assertOk()
             ->assertJsonPath('0.sales_date', '2026-08-21')
-            ->assertJsonPath('1.sales_date', '2026-08-18');
+            ->assertJsonPath('0.daily_total_orders', 10)
+            ->assertJsonPath('1.daily_total_orders', 10)
+            ->assertJsonPath('2.sales_date', '2026-08-18')
+            ->assertJsonPath('2.daily_total_orders', 2);
     }
 
     public function test_customer_order_drill_down_uses_the_same_sales_dates_as_the_summary(): void

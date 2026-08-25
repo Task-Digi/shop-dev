@@ -110,24 +110,13 @@ class ReportController extends Controller
             ->groupBy('customer_id', 'customer_name')
             ->orderBy('total_sales', 'DESC');
 
-        $totalOrdersByCustomer = DB::table('sale_data')
-            ->select(
-                'customer_id',
-                DB::raw('COUNT(DISTINCT orderid) AS total_order_count')
-            )
-            ->groupBy('customer_id');
-
         $salesDataQuery = DB::table('sale_data')
             ->leftJoin('customers', 'sale_data.customer_id', '=', 'customers.customer_id')
-            ->leftJoinSub($totalOrdersByCustomer, 'customer_order_totals', function ($join) {
-                $join->on('sale_data.customer_id', '=', 'customer_order_totals.customer_id');
-            })
             ->select(
                 'sale_data.location',
                 'sale_data.customer_id',
                 'sale_data.customer_name',
                 'customers.KS_exists',
-                DB::raw('COALESCE(customer_order_totals.total_order_count, 0) AS total_order_count'),
                 DB::raw('COUNT(DISTINCT sale_data.orderid) as order_id_count'),
                 DB::raw('SUM(sale_data.count) as total_products_sold'),
                 DB::raw('SUM(sale_data.count * sale_data.price) as total_sales'),
@@ -137,8 +126,7 @@ class ReportController extends Controller
                 'sale_data.location',
                 'sale_data.customer_id',
                 'sale_data.customer_name',
-                'customers.KS_exists',
-                'customer_order_totals.total_order_count'
+                'customers.KS_exists'
             )
             ->orderBy('total_sales', 'DESC');
 
@@ -255,6 +243,14 @@ class ReportController extends Controller
 
             // Fetch data from the database
             $customerData = DB::select($query, $params);
+
+            $dailyTotals = collect($customerData)
+                ->groupBy('sales_date')
+                ->map(fn ($orders) => $orders->sum(fn ($order) => (float) $order->total_products_sold));
+
+            foreach ($customerData as $order) {
+                $order->daily_total_orders = $dailyTotals->get($order->sales_date, 0);
+            }
 
             return response()->json($customerData);
         } catch (\Exception $e) {

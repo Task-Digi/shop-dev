@@ -136,7 +136,7 @@
                             </td>
                             <td class="col-date"></td>
                             <td class="col-location">{{ $sale->location }}</td>
-                            <td class="col-total-orders text-right">{{ number_format($sale->total_order_count, 0, '.', ',') }}</td>
+                            <td class="col-total-orders text-right">{{ number_format($sale->total_products_sold, 0, '.', ',') }}</td>
                             <td class="col-num text-right">{{ number_format($sale->order_id_count, 0, '.', ',') }}</td>
                             <td class="col-num text-right">{{ number_format($sale->total_products_sold, 0, '.', ',') }}</td>
                             <td class="col-price text-right">{{ $sale->unit_price_avg !== null ? number_format($sale->unit_price_avg, 2, '.', ',') : '–' }}</td>
@@ -578,7 +578,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
                             '<td class="col-customer"><h6>' + escapeCustomerHtml(customer.customer_id) + '</h6></td>' +
                             '<td class="col-date"><h6>' + escapeCustomerHtml(formatDate(customer.sales_date)) + '</h6></td>' +
                             '<td class="col-location"><h6>' + escapeCustomerHtml(customer.location) + '</h6></td>' +
-                            '<td class="col-total-orders"><h6></h6></td>' +
+                            '<td class="col-total-orders text-right"><h6>' + escapeCustomerHtml(customer.daily_total_orders) + '</h6></td>' +
                             '<td class="col-num text-right"><h6>' + orderRefCell(customer.orderid) + '</h6></td>' +
                             '<td class="col-num text-right"><h6>' + customer.total_products_sold + '</h6></td>' +
                             '<td class="col-price text-right"><h6>' + formatMoney(customer.unit_price) + '</h6></td>' +
