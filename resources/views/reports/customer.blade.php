@@ -120,6 +120,7 @@
                             <th class="col-customer">Customer Name</th>
                             <th class="col-date">Sales.Date</th>
                             <th class="col-location">Sales.Location</th>
+                            <th class="col-total-orders text-right">Total Orders</th>
                             <th class="col-num text-right">No.Orders</th>
                             <th class="col-num text-right">No.Sold</th>
                             <th class="col-price text-right">Price</th>
@@ -128,13 +129,14 @@
                     </thead>
                     <tbody>
                         @forelse ($salesData as $sale)
-                        <tr class="mobile-row" data-date="">
-                            <td class="col-customer" data-customer_id="{{ $sale->customer_id }}">{{ $sale->customer_name }} @if(($sale->KS_exists ?? 0) == 1)
+                        <tr class="mobile-row" data-customer-id="{{ $sale->customer_id }}" data-location="{{ $sale->location }}">
+                            <td class="col-customer">{{ $sale->customer_name }} @if(($sale->KS_exists ?? 0) == 1)
                                 <span class="badge badge-pill badge-danger">KS</span>
                                 @endif
                             </td>
                             <td class="col-date"></td>
-                            <td class="col-location" data-location="{{ $sale->location }}">{{ $sale->location }}</td>
+                            <td class="col-location">{{ $sale->location }}</td>
+                            <td class="col-total-orders text-right">{{ number_format($sale->total_order_count, 0, '.', ',') }}</td>
                             <td class="col-num text-right">{{ number_format($sale->order_id_count, 0, '.', ',') }}</td>
                             <td class="col-num text-right">{{ number_format($sale->total_products_sold, 0, '.', ',') }}</td>
                             <td class="col-price text-right">{{ $sale->unit_price_avg !== null ? number_format($sale->unit_price_avg, 2, '.', ',') : '–' }}</td>
@@ -144,7 +146,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="7" class="text-center text-muted py-5">
+                            <td colspan="8" class="text-center text-muted py-5">
                                 <strong>No customers found.</strong><br>
                                 Try another search or period.
                             </td>
@@ -499,8 +501,10 @@ document.getElementById('searchInput').value = ''; // Clear search input
         ajaxInProgress = true;
 
         // var date = $(this).data('date');
-        var location = $(this).find('td[data-location]').data('location');
-        var customerId = $(this).find('td[data-customer_id]').data('customer_id');
+        // Read attributes as strings so numeric-looking customer IDs are not
+        // converted by jQuery (which can remove leading zeroes or lose digits).
+        var location = this.getAttribute('data-location');
+        var customerId = this.getAttribute('data-customer-id');
         var hiddenRow = $(this).next('.hidden-row2');
         var requestKey = String(customerId) + '|' + String(location);
 
@@ -512,7 +516,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
         if (!isHiddenRowVisible) {
             hideCustomerReportStatus();
             $('.customer-details-row, .customer-details-lastRow, .hidden-row3').remove();
-            hiddenRow.html('<td colspan="7" class="text-center text-muted py-3">Loading customer orders...</td>').show();
+            hiddenRow.html('<td colspan="8" class="text-center text-muted py-3">Loading customer orders...</td>').show();
             $.ajax({
                 url: '/CustomerReport/details',
                 method: 'GET',
@@ -534,7 +538,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
                     // Append each customer's details as individual rows
                     var orderRowsHtml = '';
                     if (!Array.isArray(response) || response.length === 0) {
-                        hiddenRow.html('<td colspan="7" class="text-center text-muted py-3">No orders found for this customer and period.</td>').show();
+                        hiddenRow.html('<td colspan="8" class="text-center text-muted py-3">No orders found for this customer and period.</td>').show();
                         sessionStorage.setItem('hiddenRowVisible2', requestKey);
                         return;
                     }
@@ -574,6 +578,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
                             '<td class="col-customer"><h6>' + escapeCustomerHtml(customer.customer_id) + '</h6></td>' +
                             '<td class="col-date"><h6>' + escapeCustomerHtml(formatDate(customer.sales_date)) + '</h6></td>' +
                             '<td class="col-location"><h6>' + escapeCustomerHtml(customer.location) + '</h6></td>' +
+                            '<td class="col-total-orders"><h6></h6></td>' +
                             '<td class="col-num text-right"><h6>' + orderRefCell(customer.orderid) + '</h6></td>' +
                             '<td class="col-num text-right"><h6>' + customer.total_products_sold + '</h6></td>' +
                             '<td class="col-price text-right"><h6>' + formatMoney(customer.unit_price) + '</h6></td>' +
@@ -588,7 +593,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
                     sessionStorage.setItem('hiddenRowVisible2', requestKey);
                 },
                 error: function() {
-                    hiddenRow.html('<td colspan="7" class="text-center text-danger py-3">Unable to load customer orders. Click the customer row to retry.</td>').show();
+                    hiddenRow.html('<td colspan="8" class="text-center text-danger py-3">Unable to load customer orders. Click the customer row to retry.</td>').show();
                     showCustomerReportStatus('Unable to load customer orders. Please retry.', 'danger');
                     sessionStorage.setItem('hiddenRowVisible2', '');
                 },
@@ -624,7 +629,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
         // Check if details for hidden-row3 are already loaded
         if (!isHiddenRowVisible) {
             ajaxInProgress = true;
-            hiddenRow.html('<td colspan="7" class="text-center text-muted py-3">Loading order items...</td>').show();
+            hiddenRow.html('<td colspan="8" class="text-center text-muted py-3">Loading order items...</td>').show();
             $.ajax({
                 url: '/customer/finaldetails',
                 method: 'GET',
@@ -638,7 +643,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
                     hiddenRow.siblings('.customer-details-lastRow').remove();
 
                     if (!Array.isArray(response) || response.length === 0) {
-                        hiddenRow.html('<td colspan="7" class="text-center text-muted py-3">No products found for this order.</td>').show();
+                        hiddenRow.html('<td colspan="8" class="text-center text-muted py-3">No products found for this order.</td>').show();
                         sessionStorage.setItem('hiddenRowVisible3', orderid);
                         return;
                     }
@@ -659,6 +664,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
                                 '<td class="col-customer"><h6></h6></td>' +
                                 '<td class="col-date"><h6></h6></td>' +
                                 '<td class="col-location"><h6>Product - ' + escapeCustomerHtml(customer.product_name) + '</h6></td>' +
+                                '<td class="col-total-orders"><h6></h6></td>' +
                                 '<td class="col-num text-right"><h6>ID - ' + escapeCustomerHtml(customer.product_id) + '</h6></td>' +
                                 '<td class="col-num text-right"><h6>' + formatNumber(customer.count) + '</h6></td>' +
                                 '<td class="col-price text-right"><h6>' + formatNumber(customer.price) + '</h6></td>' +
@@ -674,7 +680,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
                     sessionStorage.setItem('hiddenRowVisible3', orderid);
                 },
                 error: function() {
-                    hiddenRow.html('<td colspan="7" class="text-center text-danger py-3">Unable to load order items. Click the order row to retry.</td>').show();
+                    hiddenRow.html('<td colspan="8" class="text-center text-danger py-3">Unable to load order items. Click the order row to retry.</td>').show();
                     showCustomerReportStatus('Unable to load order items. Please retry.', 'danger');
                     sessionStorage.setItem('hiddenRowVisible3', '');
                 },
@@ -786,12 +792,13 @@ document.getElementById('searchInput').value = ''; // Clear search input
         text-align: right;
     }
 
-    .customer-report-table .col-customer { width: 28%; }
-    .customer-report-table .col-date     { width: 12%; }
-    .customer-report-table .col-location { width: 14%; }
-    .customer-report-table .col-num      { width: 10%; }
-    .customer-report-table .col-price    { width: 10%; }
-    .customer-report-table .col-sum      { width: 16%; }
+    .customer-report-table .col-customer     { width: 26%; }
+    .customer-report-table .col-date         { width: 11%; }
+    .customer-report-table .col-location     { width: 13%; }
+    .customer-report-table .col-total-orders { width: 9%; }
+    .customer-report-table .col-num          { width: 9%; }
+    .customer-report-table .col-price        { width: 9%; }
+    .customer-report-table .col-sum          { width: 14%; }
 
     @media (max-width: 767.98px) {
         .customer-report-table {

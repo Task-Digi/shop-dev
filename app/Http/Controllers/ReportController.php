@@ -110,19 +110,36 @@ class ReportController extends Controller
             ->groupBy('customer_id', 'customer_name')
             ->orderBy('total_sales', 'DESC');
 
+        $totalOrdersByCustomer = DB::table('sale_data')
+            ->select(
+                'customer_id',
+                DB::raw('COUNT(DISTINCT orderid) AS total_order_count')
+            )
+            ->groupBy('customer_id');
+
         $salesDataQuery = DB::table('sale_data')
             ->leftJoin('customers', 'sale_data.customer_id', '=', 'customers.customer_id')
+            ->leftJoinSub($totalOrdersByCustomer, 'customer_order_totals', function ($join) {
+                $join->on('sale_data.customer_id', '=', 'customer_order_totals.customer_id');
+            })
             ->select(
                 'sale_data.location',
                 'sale_data.customer_id',
                 'sale_data.customer_name',
                 'customers.KS_exists',
+                DB::raw('COALESCE(customer_order_totals.total_order_count, 0) AS total_order_count'),
                 DB::raw('COUNT(DISTINCT sale_data.orderid) as order_id_count'),
                 DB::raw('SUM(sale_data.count) as total_products_sold'),
                 DB::raw('SUM(sale_data.count * sale_data.price) as total_sales'),
                 $this->weightedUnitPriceAvg('sale_data')
             )
-            ->groupBy('sale_data.location', 'sale_data.customer_id', 'sale_data.customer_name', 'customers.KS_exists')
+            ->groupBy(
+                'sale_data.location',
+                'sale_data.customer_id',
+                'sale_data.customer_name',
+                'customers.KS_exists',
+                'customer_order_totals.total_order_count'
+            )
             ->orderBy('total_sales', 'DESC');
 
         // Period filter (days = 0 means all time). Otherwise use the latest
@@ -213,13 +230,18 @@ class ReportController extends Controller
                     AND customer_id = ?
             ";
 
-            // Add the date filtering condition based on the 'days' variable
+            // Use the same latest distinct sales dates as the summary query so
+            // its order count and the expanded rows always describe one period.
             if ($days == 0) {
                 $params = [$location, $customerId]; // No date filter, just location and customer_id
             } else {
-                $startDate = now()->subDays(max(0, (int) $days - 1))->toDateString();
-                $query .= " AND date >= ?";
-                $params = [$location, $customerId, $startDate]; // Add the start date to the parameters
+                $salesDates = $this->latestSalesDates((int) $days)->values()->all();
+                if ($salesDates === []) {
+                    return response()->json([]);
+                }
+                $datePlaceholders = implode(', ', array_fill(0, count($salesDates), '?'));
+                $query .= " AND date IN ({$datePlaceholders})";
+                $params = array_merge([$location, $customerId], $salesDates);
             }
 
             // Group and order the results
@@ -227,7 +249,8 @@ class ReportController extends Controller
                 GROUP BY
                     orderid, location, type, payment, customer_id, customer_name
                 ORDER BY
-                    sales_date ASC
+                    sales_date DESC,
+                    orderid DESC
             ";
 
             // Fetch data from the database
