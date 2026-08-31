@@ -158,4 +158,58 @@ class SaleItemReturnTest extends TestCase
         // +1485.76 - 1485.76 = 0 net sales
         $this->assertEquals(0.00, round((float) $totals->net_sales, 2));
     }
+
+    public function test_mistake_entry_can_be_edited_to_negative_count_and_updates_all_totals(): void
+    {
+        $service = app(SaleItemService::class);
+
+        // 1. User accidentally entered a return as +2
+        $orderId = 'MISTAKE_ORD_' . uniqid();
+        $service->create([
+            'date' => '2026-08-31',
+            'location' => 'MAJORSTUEN',
+            'type' => 'MalProff MPP',
+            'payment' => 'Invoice',
+            'customerid' => (string) $this->customer->customer_id,
+            'orderid' => $orderId,
+            'productid' => [(string) $this->product->product_id],
+            'count' => [2], // Mistakenly entered as +2
+        ]);
+
+        $saleData = SaleData::where('orderid', $orderId)->firstOrFail();
+        $this->assertEquals(2, $saleData->count);
+
+        // 2. User goes to Sold Registry -> clicks Edit -> changes count to -2
+        $service->update($saleData, [
+            'date' => '2026-08-31',
+            'location' => 'MAJORSTUEN',
+            'type' => 'MalProff MPP',
+            'payment' => 'Invoice',
+            'customerid' => (string) $this->customer->customer_id,
+            'orderid' => $orderId,
+            'productid' => (string) $this->product->product_id,
+            'count' => -2, // Fixed to -2
+        ]);
+
+        // 3. Verify that both database tables are updated
+        $this->assertDatabaseHas('sales_lists', [
+            'orderid' => $orderId,
+            'count' => '-2',
+        ]);
+
+        $this->assertDatabaseHas('sale_data', [
+            'orderid' => $orderId,
+            'count' => -2,
+        ]);
+
+        // 4. Verify that total calculations instantly reflect the -2 deduction
+        $totals = DB::table('sale_data')
+            ->where('orderid', $orderId)
+            ->selectRaw('SUM(count) as total_qty, SUM(count * price) as net_sales')
+            ->first();
+
+        $this->assertEquals(-2, (int) $totals->total_qty);
+        $this->assertEquals(-1485.76, round((float) $totals->net_sales, 2));
+    }
 }
+
