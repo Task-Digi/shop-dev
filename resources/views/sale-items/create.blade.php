@@ -209,7 +209,7 @@
                                     </div>
                                     <div class="col-12 col-md-4">
                                         <label for="count">Count:</label>
-                                        <input type="number" name="count[]" class="form-control" value="{{ old('count.0') }}" min="1" max="1000000" step="1" required>
+                                        <input type="number" name="count[]" class="form-control" value="{{ old('count.0') }}" min="-1000000" max="1000000" step="1" required placeholder="e.g. 2 or -2">
                                     </div>
 
                                     <div class="col-12 col-md-4">
@@ -603,6 +603,17 @@
                 newFields.find('input[name="productid[]"]').last().focus();
             });
 
+            // Handle Scandinavian trailing minus format (e.g. 2- or 2,00-)
+            $(document).on('blur change', 'input[name="count[]"]', function() {
+                var raw = ($(this).val() || '').toString().trim();
+                if (raw.endsWith('-')) {
+                    var num = raw.slice(0, -1).trim().replace(',', '.');
+                    if (!isNaN(num) && num !== '') {
+                        $(this).val(-Math.abs(Math.round(parseFloat(num))));
+                    }
+                }
+            });
+
             // Form submission event
             $('#saleForm').on('submit', function(e) {
                 // Prevent form submission
@@ -611,6 +622,19 @@
                 refreshDuplicateProductIdWarnings();
                 if (hasDuplicateProductIds()) {
                     alert('Each product ID can only be entered once. Remove duplicate product IDs before saving.');
+                    return;
+                }
+
+                var hasZeroCount = false;
+                $('input[name="count[]"]').each(function() {
+                    var val = parseInt($(this).val(), 10);
+                    if (val === 0) {
+                        hasZeroCount = true;
+                    }
+                });
+
+                if (hasZeroCount) {
+                    alert('Count cannot be 0. Enter a positive number for sales or a negative number for returns.');
                     return;
                 }
 

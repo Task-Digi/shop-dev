@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Http\Requests\TimesheetDownloadRequest;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -25,12 +25,8 @@ class TimesheetController extends Controller
         return view('timesheet.index');
     }
 
-    public function download(Request $request)
+    public function download(TimesheetDownloadRequest $request)
     {
-        $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt',
-        ]);
-
         $file = $request->file('csv_file');
 
         try {

@@ -434,7 +434,18 @@
                     { data: 'customer_name', name: 'customer_name' },
                     { data: 'orderid',       name: 'orderid' },
                     { data: 'product_id',    name: 'product_id' },
-                    { data: 'count',         name: 'count', orderable: false },
+                    {
+                        data: 'count',
+                        name: 'count',
+                        orderable: false,
+                        render: function(data, type, row) {
+                            var num = parseInt(data, 10);
+                            if (!isNaN(num) && num < 0) {
+                                return '<span class="badge badge-danger text-white font-weight-bold" style="background-color: #ef4444; font-size: 0.85rem; padding: 2px 7px; border-radius: 4px;" title="Credit Note / Return">' + data + ' (Return)</span>';
+                            }
+                            return data;
+                        }
+                    },
                     {
                         data: 'id',
                         name: 'action',

@@ -139,7 +139,7 @@
                             <td class="col-total-orders text-right">{{ number_format($sale->total_products_sold, 0, '.', ',') }}</td>
                             <td class="col-num text-right">{{ number_format($sale->order_id_count, 0, '.', ',') }}</td>
                             <td class="col-num text-right">{{ number_format($sale->total_products_sold, 0, '.', ',') }}</td>
-                            <td class="col-price text-right">{{ $sale->unit_price_avg !== null ? number_format($sale->unit_price_avg, 2, '.', ',') : '–' }}</td>
+                            <td class="col-price text-right">{{ $sale->unit_price_avg !== null ? number_format($sale->unit_price_avg, 2, '.', ',') : '0.00' }}</td>
                             <td class="col-sum text-right">{{ number_format($sale->total_sales, 2, '.', ',') }}</td>
                         </tr>
                         <tr class="hidden-row2" style="display: none;color:green">
@@ -556,7 +556,7 @@ document.getElementById('searchInput').value = ''; // Clear search input
                             return `${day}.${month}.${year}`;
                         }
                         function formatMoney(n) {
-                            if (n === null || n === undefined || n === '') return '–';
+                            if (n === null || n === undefined || n === '') return '0.00';
                             return Number(n).toLocaleString('en-US', {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2

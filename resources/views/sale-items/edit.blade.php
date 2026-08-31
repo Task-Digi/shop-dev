@@ -70,7 +70,7 @@
 
         <div class="form-group">
             <label for="count">Count:</label>
-            <input type="number" id="count" name="count" class="form-control" value="{{ old('count', $saleItem->count) }}" min="1" max="1000000" step="1" required>
+            <input type="number" id="count" name="count" class="form-control" value="{{ old('count', $saleItem->count) }}" min="-1000000" max="1000000" step="1" required placeholder="e.g. 2 or -2">
         </div>
 
         <button type="submit" class="btn btn-primary" id="updateSaleButton">Update</button>
@@ -79,7 +79,23 @@
     </form>
 </div>
 <script>
-    document.getElementById('editSaleForm').addEventListener('submit', function () {
+    document.getElementById('count').addEventListener('blur', function () {
+        var raw = (this.value || '').toString().trim();
+        if (raw.endsWith('-')) {
+            var num = raw.slice(0, -1).trim().replace(',', '.');
+            if (!isNaN(num) && num !== '') {
+                this.value = -Math.abs(Math.round(parseFloat(num)));
+            }
+        }
+    });
+
+    document.getElementById('editSaleForm').addEventListener('submit', function (e) {
+        var countVal = parseInt(document.getElementById('count').value, 10);
+        if (countVal === 0) {
+            e.preventDefault();
+            alert('Count cannot be 0. Enter a positive number for sales or a negative number for returns.');
+            return false;
+        }
         var button = document.getElementById('updateSaleButton');
         button.disabled = true;
         button.textContent = 'Updating...';

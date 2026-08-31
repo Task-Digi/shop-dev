@@ -22,7 +22,7 @@ class ReportController extends Controller
         $c = $tableAlias ? "{$tableAlias}.count" : 'count';
         $p = $tableAlias ? "{$tableAlias}.price" : 'price';
 
-        return DB::raw("CASE WHEN SUM({$c}) > 0 THEN ROUND(SUM({$c} * {$p}) / SUM({$c}), 2) ELSE NULL END as unit_price_avg");
+        return DB::raw("CASE WHEN SUM({$c}) != 0 THEN ROUND(SUM({$c} * {$p}) / SUM({$c}), 2) ELSE NULL END as unit_price_avg");
     }
 
     /**

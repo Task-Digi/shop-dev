@@ -1,8 +1,8 @@
 <?php
 
 namespace App\Http\Controllers;
+use App\Http\Requests\CompanyRequest;
 use App\Models\Company;
-use Illuminate\Http\Request;
 
 class CompanyController extends Controller
 {
@@ -33,15 +33,9 @@ class CompanyController extends Controller
     * @param  \Illuminate\Http\Request  $request
     * @return \Illuminate\Http\Response
     */
-    public function store(Request $request)
+    public function store(CompanyRequest $request)
     {
-        $request->validate([
-            'name' => 'required',
-            'email' => 'required',
-            'address' => 'required',
-        ]);
-        
-        Company::create($request->post());
+        Company::create($request->validated());
 
         return redirect()->route('companies.index')->with('success','Company has been created successfully.');
     }
@@ -75,15 +69,9 @@ class CompanyController extends Controller
     * @param  \App\company  $company
     * @return \Illuminate\Http\Response
     */
-    public function update(Request $request, Company $company)
+    public function update(CompanyRequest $request, Company $company)
     {
-        $request->validate([
-            'name' => 'required',
-            'email' => 'required',
-            'address' => 'required',
-        ]);
-        
-        $company->fill($request->post())->save();
+        $company->update($request->validated());
 
         return redirect()->route('companies.index')->with('success','Company Has Been updated successfully');
     }

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreSaleItemRequest;
+use App\Http\Requests\UpdateSaleItemRequest;
 use App\Models\SalesList;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -9,20 +11,12 @@ use App\Models\SaleData;
 use App\Models\Product;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
+use App\Services\SaleItemService;
 
 class SaleItemController extends Controller
 {
-    /**
-     * Snapshot products.price onto sale_data at registration time (nullable if unknown).
-     */
-    protected function snapshotUnitPriceFromProduct(?Product $product): ?float
+    public function __construct(private readonly SaleItemService $saleItemService)
     {
-        if ($product === null || $product->price === null || $product->price === '') {
-            return null;
-        }
-
-        return round((float) $product->price, 4);
     }
 
     public function index()
@@ -66,87 +60,14 @@ class SaleItemController extends Controller
     }
 
 
-    public function store(Request $request)
+    public function store(StoreSaleItemRequest $request)
     {
-        $request->validate([
-            'date' => 'required|date',
-            'location' => ['required', Rule::in(['ALNABRU', 'MAJORSTUEN'])],
-            'type' => ['required', Rule::in(['MalProff MPP', 'FARGERIKE'])],
-            'payment' => ['required', Rule::in(['Invoice', 'Cash/Card'])],
-            'customerid' => 'required|string|max:255|exists:customers,customer_id',
-            'orderid' => 'required|string|max:255|unique:sales_lists,orderid',
-            'productid' => 'required|array|min:1|max:100',
-            'productid.*' => 'required|string|max:255|distinct|exists:products,product_id',
-            'count' => 'required|array|min:1|max:100',
-            'count.*' => 'required|integer|min:1|max:1000000',
-        ], [
-            'customerid.exists' => 'The selected Customer ID was not found.',
-            'orderid.unique' => 'Order ID already exists. Please enter a different Order ID.',
-            'productid.*.exists' => 'One or more Product IDs were not found.',
-            'productid.*.distinct' => 'Each Product ID can only be entered once per order.',
-        ]);
-
-        if (count($request->input('productid')) !== count($request->input('count'))) {
-            return back()->withErrors(['count' => 'Every product must have exactly one quantity.'])->withInput();
-        }
-
-        DB::beginTransaction();
         try {
-            // Retrieve customer detail once
-            $customer = Customer::where('customer_id', $request->input('customerid'))->first();
+            $this->saleItemService->create($request->validated());
 
-            // Loop through each productid and count
-            foreach ($request->input('productid') as $key => $productId) {
-                // Ensure count exists for the given key
-                $count = $request->input('count')[$key] ?? 0;
-
-                // Insert into SalesList table
-                $salesList = SalesList::create([
-                    'date' => $request->input('date'),
-                    'location' => $request->input('location'),
-                    'type' => $request->input('type'),
-                    'payment' => $request->input('payment'),
-                    'customerid' => $request->input('customerid'),
-                    'orderid' => $request->input('orderid'),
-                    'productid' => $productId,
-                    'count' => $count,
-                ]);
-
-                // Retrieve product details
-                $product = Product::where('product_id', $productId)->first();
-
-                // Insert corresponding data into sale_data table
-                $salesData = SaleData::create([
-                    'date' => $request->input('date'),
-                    'location' => $request->input('location'),
-                    'type' => $request->input('type'),
-                    'payment' => $request->input('payment'),
-                    'customer_id' => $request->input('customerid'),
-                    'customer_name' => $customer ? $customer->customer_name : null,
-                    'crm_exists' => $customer ? $customer->crm_exists : null,
-                    'crm_link' => $customer ? $customer->crm_link : null,
-                    'crm_id' => $customer ? $customer->crm_id : null,
-                    'orderid' => $request->input('orderid'),
-                    'product_id' => $productId,
-                    'product_name' => $product ? $product->product_name : null,
-                    'price' => $this->snapshotUnitPriceFromProduct($product),
-                    'retail' => $product ? $product->retail : null,
-                    'count' => $count,
-                    'sales_list_id' => $salesList->id,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
-
-            DB::commit();
-            // Redirect back to the previous page with a success message
             return back()->with('success', 'Sale items created successfully!');
         } catch (\Exception $e) {
-            DB::rollBack();
-            // Log the exception for debugging
             Log::error($e);
-
-            // Return with an error message
             return back()->with('error', 'Error storing sale items. Please try again.');
         }
     }
@@ -175,91 +96,19 @@ class SaleItemController extends Controller
         return view('sale-items.edit', compact('saleItem'));
     }
 
-    public function update(Request $request, $id)
+    public function update(UpdateSaleItemRequest $request, $id)
     {
         $saleData = SaleData::find($id);
         if (!$saleData) {
             return redirect('/Dashboard')->with('error', 'Sale item not found. It may already have been deleted.');
         }
 
-        // Validate the input data
-        $request->validate([
-            'date' => 'required|date',
-            'location' => ['required', Rule::in(['ALNABRU', 'MAJORSTUEN'])],
-            'type' => ['required', Rule::in(['MalProff MPP', 'FARGERIKE'])],
-            'payment' => ['required', Rule::in(['Invoice', 'Cash/Card'])],
-            'customerid' => 'required|string|max:255|exists:customers,customer_id',
-            'productid' => 'required|string|max:255|exists:products,product_id',
-            'orderid' => 'required|string|max:255',
-            'count' => 'required|integer|min:1|max:1000000',
-        ], [
-            'customerid.exists' => 'The selected Customer ID was not found.',
-            'productid.exists' => 'The selected Product ID was not found.',
-        ]);
-
-        if ($request->orderid !== $saleData->orderid
-            && SalesList::where('orderid', $request->orderid)->exists()) {
-            return back()
-                ->withErrors(['orderid' => 'Order ID already belongs to another sale.'])
-                ->withInput();
-        }
-
         Log::info("Update called for ID: $id");
-        DB::beginTransaction();
         try {
-            $saleItem = $saleData->sales_list_id
-                ? SalesList::find($saleData->sales_list_id)
-                : SalesList::where('orderid', $saleData->orderid)
-                    ->where('productid', $saleData->product_id)
-                    ->first();
+            $this->saleItemService->update($saleData, $request->validated());
 
-            if (!$saleItem) {
-                DB::rollBack();
-                return back()->with('error', 'Linked sale item not found.');
-            }
-
-            $saleItem->update([
-                'date' => $request->date,
-                'location' => $request->location,
-                'type' => $request->type,
-                'payment' => $request->payment,
-                'customerid' => $request->customerid,
-                'orderid' => $request->orderid,
-                'productid' => $request->productid,
-                'count' => $request->count,
-            ]);
-
-            // Fetch the related customer and product details
-            $customer = Customer::where('customer_id', $request->customerid)->first();
-            $product = Product::where('product_id', $request->productid)->first();
-
-            $saleData->date = $request->date;
-            $saleData->location = $request->location;
-            $saleData->type = $request->type;
-            $saleData->payment = $request->payment;
-            $saleData->customer_id = $request->customerid;
-            $saleData->customer_name = $customer ? $customer->customer_name : null;
-            $saleData->crm_exists = $customer ? $customer->crm_exists : null;
-            $saleData->crm_link = $customer ? $customer->crm_link : null;
-            $saleData->crm_id = $customer ? $customer->crm_id : null;
-            $saleData->orderid = $request->orderid;
-            $saleData->product_id = $request->productid;
-            $saleData->product_name = $product ? $product->product_name : null;
-            $saleData->price = $this->snapshotUnitPriceFromProduct($product);
-            $saleData->retail = $product ? $product->retail : null;
-            $saleData->count = $request->count;
-            $saleData->sales_list_id = $saleItem->id;
-            $saleData->updated_at = now();
-
-            // Save the updated sale_data
-            $saved = $saleData->save();
-            Log::info("SaleData save result for ID: $id : " . ($saved ? 'true' : 'false'));
-
-            DB::commit();
-            // Redirect to the view page after updating
             return redirect('/Dashboard')->with('success', 'Sale item updated successfully!');
         } catch (\Exception $e) {
-            DB::rollBack();
             Log::error("Error updating sale item ID: $id. Error: " . $e->getMessage());
             return back()->with('error', 'Error updating sale item. Please try again.');
         }
@@ -267,33 +116,16 @@ class SaleItemController extends Controller
 
     public function destroy($id)
     {
-        DB::beginTransaction();
         try {
             $saleData = SaleData::find($id);
 
             if (!$saleData) {
-                DB::rollBack();
                 return redirect('/Dashboard')->with('error', 'Sale item not found. It may already have been deleted.');
             }
 
-            $saleItem = $saleData?->sales_list_id
-                ? SalesList::find($saleData->sales_list_id)
-                : ($saleData ? SalesList::where('orderid', $saleData->orderid)
-                    ->where('productid', $saleData->product_id)
-                    ->first() : null);
-
-            if ($saleItem) {
-                $saleItem->delete();
-            }
-
-            if ($saleData) {
-                $saleData->delete();
-            }
-
-            DB::commit();
+            $this->saleItemService->delete($saleData);
             return redirect('/Dashboard')->with('success', 'Sale item deleted successfully!');
         } catch (\Exception $e) {
-            DB::rollBack();
             Log::error("Error deleting sale item ID: $id. Error: " . $e->getMessage());
             return back()->with('error', 'Error deleting sale item. Please try again.');
         }
@@ -436,7 +268,7 @@ class SaleItemController extends Controller
                     ->orWhere('customer_name', 'like', "%{$globalSearch}%")
                     ->orWhere('product_name', 'like', "%{$globalSearch}%");
 
-                if (ctype_digit($globalSearch)) {
+                if (preg_match('/^-?\d+$/', $globalSearch)) {
                     $q->orWhere('count', (int) $globalSearch);
                 }
 

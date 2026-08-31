@@ -133,12 +133,9 @@
                             <td></td>
                             <td data-location="{{ $sale->location }}">{{ $sale->location }}</td>
                             <td>{{ number_format($sale->customer_count, 0, '.', ',') }}</td>
-                            <td style="">{{ number_format($sale->order_id_count, 0, '.', ',') }}
-                            </td>
-                            <td style="">
-                                {{ number_format($sale->product_id_count, 0, '.', ',') }}
-                            </td>
-                            <td style="text-align: right;">{{ $sale->unit_price_avg !== null ? number_format($sale->unit_price_avg, 2, '.', ',') : '–' }}</td>
+                            <td>{{ number_format($sale->order_id_count, 0, '.', ',') }}</td>
+                            <td>{{ number_format($sale->product_id_count, 0, '.', ',') }}</td>
+                            <td style="text-align: right;">{{ $sale->unit_price_avg !== null ? number_format($sale->unit_price_avg, 2, '.', ',') : '0.00' }}</td>
                             <td style="text-align: right;">
                                 {{ number_format($sale->total_products_price, 2, '.', ',') }}
                             </td>
@@ -417,7 +414,7 @@
                         return `${day}.${month}.${year}`;
                     }
                     function formatMoney(n) {
-                        if (n === null || n === undefined || n === '') return '–';
+                        if (n === null || n === undefined || n === '') return '0.00';
                         return Number(n).toLocaleString('en-US', {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2
@@ -521,7 +518,7 @@
                         return `${day}.${month}.${year}`;
                     }
                     function formatMoney(n) {
-                        if (n === null || n === undefined || n === '') return '–';
+                        if (n === null || n === undefined || n === '') return '0.00';
                         return Number(n).toLocaleString('en-US', {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2

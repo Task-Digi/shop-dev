@@ -15,7 +15,7 @@
 <div class="card">
     @include('layouts.nav_bar')
     <h4>Sales-Report View</h4>
-    <div class="card-body" style="">
+    <div class="card-body">
         {{-- <a href="/Report_view" class="btn btn-primary">Back to Dashboard</a> --}}
         <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#collapseExample2"
             aria-expanded="false" aria-controls="collapseExample2">
@@ -175,12 +175,9 @@
                                 {{ $sale->customer_count }}
                             </td>
                             <td></td>
-                            <td style="">{{ number_format($sale->order_id_count, 0, '.', ',') }}
-                            </td>
-                            <td style="">
-                                {{ number_format($sale->product_id_count, 0, '.', ',') }}
-                            </td>
-                            <td style="text-align: right;">{{ $sale->unit_price_avg !== null ? number_format($sale->unit_price_avg, 2, '.', ',') : '–' }}</td>
+                            <td>{{ number_format($sale->order_id_count, 0, '.', ',') }}</td>
+                            <td>{{ number_format($sale->product_id_count, 0, '.', ',') }}</td>
+                            <td style="text-align: right;">{{ $sale->unit_price_avg !== null ? number_format($sale->unit_price_avg, 2, '.', ',') : '0.00' }}</td>
                             <td style="text-align: right;">
                                 {{ number_format($sale->mpp_sales, 2, '.', ',') }}
                             </td>
@@ -231,6 +228,8 @@
         </div>
     </div>
 </div>
+<script type="application/json" id="dailySalesChartData">{!! json_encode($chartSeries ?? ['labels' => [], 'values' => []], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
+<script type="application/json" id="dailySalesCustomerName">{!! json_encode($customer_name ?? null, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
 <script>
     function handleDaysChange() {
         const daysDropdown = document.getElementById("days");
@@ -272,7 +271,8 @@
         //     var route = "/sales-data";
         // }
 
-        const chartSeries = @json($chartSeries ?? ['labels' => [], 'values' => []]);
+        const chartSeriesElement = document.getElementById('dailySalesChartData');
+        const chartSeries = chartSeriesElement ? JSON.parse(chartSeriesElement.textContent || '{"labels":[],"values":[]}') : { labels: [], values: [] };
         const chartLabelsRaw = chartSeries.labels || [];
         const sales = (chartSeries.values || []).map(function(v) {
             var n = Number(v);
@@ -511,7 +511,8 @@
             var hiddenRow = clickedRow.nextAll('.hidden-row').first();
 
             var isHiddenRowVisible = sessionStorage.getItem('hiddenRowVisible') === drillDownKey;
-            var customer_name = @json($customer_name);
+            var custNameEl = document.getElementById('dailySalesCustomerName');
+            var customer_name = custNameEl ? JSON.parse(custNameEl.textContent || 'null') : null;
             if (!isHiddenRowVisible && !customer_name) {
                 $('.hidden-row1, .hidden-row2, .hidden-row2-products, .customer-details-row, .customer-details-lastRow').remove();
                 hiddenRow.html('<td colspan="10" class="text-center text-muted py-3">Loading customer sales...</td>').show();
@@ -612,7 +613,7 @@
                                     formatNumber(name.product_count) +
                                     '</td>' +
                                     '<td style="padding: 4px 8px; text-align: right; vertical-align: middle;">' +
-                                    (name.unit_price_avg != null && !isNaN(Number(name.unit_price_avg)) ? formatNumber(Number(name.unit_price_avg)) : '–') + '</td>' +
+                                    (name.unit_price_avg != null && !isNaN(Number(name.unit_price_avg)) ? formatNumber(Number(name.unit_price_avg)) : formatNumber(0)) + '</td>' +
                                     '<td style="padding: 4px 8px; text-align: right; vertical-align: middle;">' +
                                     formatNumber(Number(name.mpp_sales || 0)) + '</td>' +
                                     '<td style="padding: 4px 8px; text-align: right; vertical-align: middle;">' +
@@ -875,7 +876,7 @@
                                     formatNumber(customer.product_count) +
                                     '</h6></td>' +
                                     '<td><h6 style="text-align: right;">' +
-                                    (customer.unit_price != null && !isNaN(Number(customer.unit_price)) ? formatNumber(Number(customer.unit_price)) : '–') + '</h6></td>' +
+                                    (customer.unit_price != null && !isNaN(Number(customer.unit_price)) ? formatNumber(Number(customer.unit_price)) : formatNumber(0)) + '</h6></td>' +
                                     '<td><h6 style="text-align: right;">' +
                                     formatNumber(customer.total_product_count) +
                                     '</h6></td>' +
