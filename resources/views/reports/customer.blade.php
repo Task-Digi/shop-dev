@@ -136,7 +136,7 @@
                             </td>
                             <td class="col-date"></td>
                             <td class="col-location">{{ $sale->location }}</td>
-                            <td class="col-total-orders text-right">{{ number_format($sale->total_products_sold, 0, '.', ',') }}</td>
+                            <td class="col-total-orders text-right">{{ number_format($sale->order_id_count, 0, '.', ',') }}</td>
                             <td class="col-num text-right">{{ number_format($sale->order_id_count, 0, '.', ',') }}</td>
                             <td class="col-num text-right">{{ number_format($sale->total_products_sold, 0, '.', ',') }}</td>
                             <td class="col-price text-right">{{ $sale->unit_price_avg !== null ? number_format($sale->unit_price_avg, 2, '.', ',') : '0.00' }}</td>
@@ -542,6 +542,18 @@ document.getElementById('searchInput').value = ''; // Clear search input
                         sessionStorage.setItem('hiddenRowVisible2', requestKey);
                         return;
                     }
+
+                    // Sort response array: latest sales date at the top (most recent to oldest)
+                    response.sort(function(a, b) {
+                        var dateA = (a.sales_date || '').toString();
+                        var dateB = (b.sales_date || '').toString();
+                        if (dateA !== dateB) {
+                            return dateA < dateB ? 1 : -1; // Descending (latest date first)
+                        }
+                        var orderA = parseInt(a.orderid, 10) || 0;
+                        var orderB = parseInt(b.orderid, 10) || 0;
+                        return orderB - orderA; // Descending order ID
+                    });
 
                     response.forEach(function(customer) {
                         if (!customer) return;
