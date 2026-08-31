@@ -211,5 +211,57 @@ class SaleItemReturnTest extends TestCase
         $this->assertEquals(-2, (int) $totals->total_qty);
         $this->assertEquals(-1485.76, round((float) $totals->net_sales, 2));
     }
+
+    public function test_mistake_return_can_be_reversed_back_to_positive_sale_or_deleted(): void
+    {
+        $service = app(SaleItemService::class);
+
+        // 1. User accidentally entered a sale as -2 (return)
+        $orderId = 'WRONG_RET_' . uniqid();
+        $service->create([
+            'date' => '2026-08-31',
+            'location' => 'MAJORSTUEN',
+            'type' => 'MalProff MPP',
+            'payment' => 'Invoice',
+            'customerid' => (string) $this->customer->customer_id,
+            'orderid' => $orderId,
+            'productid' => [(string) $this->product->product_id],
+            'count' => [-2], // Accidentally entered as Return
+        ]);
+
+        $saleData = SaleData::where('orderid', $orderId)->firstOrFail();
+        $this->assertEquals(-2, $saleData->count);
+
+        // 2. Reverse via Edit: Change -2 to +2
+        $service->update($saleData, [
+            'date' => '2026-08-31',
+            'location' => 'MAJORSTUEN',
+            'type' => 'MalProff MPP',
+            'payment' => 'Invoice',
+            'customerid' => (string) $this->customer->customer_id,
+            'orderid' => $orderId,
+            'productid' => (string) $this->product->product_id,
+            'count' => 2, // Reversing back to positive sale
+        ]);
+
+        $this->assertDatabaseHas('sale_data', [
+            'orderid' => $orderId,
+            'count' => 2,
+        ]);
+
+        $totals = DB::table('sale_data')
+            ->where('orderid', $orderId)
+            ->selectRaw('SUM(count) as total_qty, SUM(count * price) as net_sales')
+            ->first();
+
+        $this->assertEquals(2, (int) $totals->total_qty);
+        $this->assertEquals(1485.76, round((float) $totals->net_sales, 2));
+
+        // 3. Or Reverse via Delete: Remove the entry completely
+        $service->delete($saleData->fresh());
+
+        $this->assertDatabaseMissing('sale_data', ['orderid' => $orderId]);
+        $this->assertDatabaseMissing('sales_lists', ['orderid' => $orderId]);
+    }
 }
 
