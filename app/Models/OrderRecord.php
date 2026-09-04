@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class OrderRecord extends Model
@@ -17,6 +18,14 @@ class OrderRecord extends Model
         'note',
         'staff'
     ];
+
+    public function scopeLatestOrderDateFirst(Builder $query): Builder
+    {
+        return $query
+            ->orderByDesc('order_date')
+            ->orderByRaw('CAST(order_id AS UNSIGNED) DESC');
+    }
+
     public function items()
     {
         return $this->hasMany(OrderItem::class, 'order_id', 'order_id');

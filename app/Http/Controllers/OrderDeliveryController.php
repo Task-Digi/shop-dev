@@ -18,7 +18,7 @@ class OrderDeliveryController extends Controller
     public function index()
     {
         $orders = OrderRecord::with(['items'])
-            ->orderByRaw('CAST(order_id AS UNSIGNED) DESC')
+            ->latestOrderDateFirst()
             ->get();
 
         // Collect all SKUs from all orders at once to bulk-load products
