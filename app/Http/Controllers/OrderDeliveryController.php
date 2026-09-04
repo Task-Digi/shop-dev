@@ -19,7 +19,7 @@ class OrderDeliveryController extends Controller
     {
         $orders = OrderRecord::with(['items'])
             ->latestOrderDateFirst()
-            ->get();
+            ->paginate(OrderRecord::DELIVERY_LIST_PER_PAGE);
 
         // Collect all SKUs from all orders at once to bulk-load products
         $allSkus = $orders->flatMap(function($order) {

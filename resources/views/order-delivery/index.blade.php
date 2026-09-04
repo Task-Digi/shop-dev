@@ -377,6 +377,14 @@
                         </tbody>
                     </table>
                 </div>
+                @if($orders->hasPages())
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-2 mt-3">
+                    <p class="small text-muted mb-0">
+                        Showing {{ $orders->firstItem() }}–{{ $orders->lastItem() }} of {{ $orders->total() }} orders
+                    </p>
+                    {{ $orders->withQueryString()->links() }}
+                </div>
+                @endif
             </div>
         </div>
 

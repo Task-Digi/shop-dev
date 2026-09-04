@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class OrderRecord extends Model
 {
+    public const DELIVERY_LIST_PER_PAGE = 25;
+
     protected $table = 'order_records';
 
     protected $fillable = [
