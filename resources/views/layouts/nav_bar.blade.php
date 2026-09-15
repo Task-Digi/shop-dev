@@ -34,7 +34,9 @@
         <a href="/report/all/product" class="btn {{ request()->is('report/all/product') ? 'btn-secondary' : 'btn-primary' }}">Products</a>
         <a href="{{ route('ict') }}" class="btn {{ request()->routeIs('ict') ? 'btn-secondary' : 'btn-primary' }}">Farrow & Ball</a>
         <a href="{{ route('order-delivery.index') }}" class="btn {{ request()->routeIs('order-delivery.*') ? 'btn-secondary' : 'btn-primary' }}">Orders</a>
-        <a href="{{ route('timesheet.index') }}" class="btn {{ request()->routeIs('timesheet.index') ? 'btn-secondary' : 'btn-primary' }}">Payroll</a>
+        @if(\Illuminate\Support\Facades\Route::has('timesheet.index'))
+            <a href="{{ route('timesheet.index') }}" class="btn {{ request()->routeIs('timesheet.index') ? 'btn-secondary' : 'btn-primary' }}">Payroll</a>
+        @endif
     </div>
 </div>
 
@@ -47,5 +49,7 @@
     <a href="/report/all/product" class="btn {{ request()->is('report/all/product') ? 'btn-secondary' : 'btn-outline-primary' }}">Products</a>
     <a href="{{ route('ict') }}" class="btn {{ request()->routeIs('ict') ? 'btn-secondary' : 'btn-outline-primary' }}">Farrow & Ball</a>
     <a href="{{ route('order-delivery.index') }}" class="btn {{ request()->routeIs('order-delivery.*') ? 'btn-secondary' : 'btn-outline-primary' }}">Orders</a>
-    <a href="{{ route('timesheet.index') }}" class="btn {{ request()->routeIs('timesheet.index') ? 'btn-secondary' : 'btn-outline-primary' }}">Payroll</a>
+    @if(\Illuminate\Support\Facades\Route::has('timesheet.index'))
+        <a href="{{ route('timesheet.index') }}" class="btn {{ request()->routeIs('timesheet.index') ? 'btn-secondary' : 'btn-outline-primary' }}">Payroll</a>
+    @endif
 </div>

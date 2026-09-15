@@ -1,28 +1,29 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-
-use App\Http\Controllers\SaleItemController;
-use App\Http\Controllers\AuthLoginController;
-use App\Http\Controllers\CalendarController;
-use App\Http\Controllers\Auth\New_LoginController;
 use App\Http\Controllers\HomeController;
+use App\Http\Controllers\SaleItemController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ProductController;
-use App\Http\Controllers\ReportController;
+use App\Http\Controllers\AuthLoginController;
 use App\Http\Controllers\OrderDeliveryController;
-use App\Http\Controllers\TimesheetController;
+use App\Http\Controllers\MasterDataController;
 
-Route::get('/', function () {
-    return redirect()->route('saleitems.view');
-});
-
-// Timesheet Routes
-Route::get('/timesheet', [TimesheetController::class, 'index'])->name('timesheet.index');
-Route::post('/timesheet/download', [TimesheetController::class, 'download'])->name('timesheet.download');
+/*
+|--------------------------------------------------------------------------
+| Web Routes
+|--------------------------------------------------------------------------
+|
+| Here is where you can register web routes for your application. These
+| routes are loaded by the RouteServiceProvider and all of them will
+| be assigned to the "web" middleware group. Make something great!
+|
+*/
 
 // Authentication Routes
-Route::get('/login', [New_LoginController::class, 'show'])->name('login');
+Route::get('/', [AuthLoginController::class, 'showLoginForm'])->name('login');
+Route::get('/login', [AuthLoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthLoginController::class, 'login']);
 
 // Dashboard Routes
@@ -118,3 +119,16 @@ Route::prefix('order-delivery')->group(function () {
 });
 
 Route::get('/home', [HomeController::class, 'index'])->name('home');
+
+// Master Data Management Routes (Customers, Products, Sales Records, Orders)
+Route::prefix('admin/master-data')->name('master.')->group(function () {
+    Route::get('/', [MasterDataController::class, 'index'])->name('index');
+    Route::post('/customer/update', [MasterDataController::class, 'updateCustomer'])->name('customer.update');
+    Route::post('/product/update', [MasterDataController::class, 'updateProduct'])->name('product.update');
+    Route::post('/sale/update', [MasterDataController::class, 'updateSaleRecord'])->name('sale.update');
+    Route::post('/order/adjust', [MasterDataController::class, 'adjustOrderItem'])->name('order.adjust');
+    Route::post('/order/delete', [MasterDataController::class, 'deleteOrderItem'])->name('order.delete');
+});
+
+// Redirect /reports (plural) to /report (singular)
+Route::redirect('/reports', '/report');
