@@ -7,13 +7,25 @@ use App\Models\Product;
 use App\Models\SaleData;
 use App\Models\SalesList;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
+use Illuminate\Validation\ValidationException;
 
 class SaleItemService
 {
     public function create(array $data): void
     {
         DB::transaction(function () use ($data): void {
+            if (Schema::hasTable('sales_reporting_days') && DB::table('sales_reporting_days')
+                ->where('date', $data['date'])
+                ->where('location', $data['location'])
+                ->where('sales_amount', 0)
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'date' => 'A zero-sales record already exists for this location and date. Remove it before entering actual sales.',
+                ]);
+            }
+
             $customer = Customer::where('customer_id', $data['customerid'])->firstOrFail();
             $products = Product::whereIn('product_id', $data['productid'])
                 ->get()

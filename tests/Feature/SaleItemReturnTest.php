@@ -176,7 +176,7 @@ class SaleItemReturnTest extends TestCase
             'count' => [2], // Mistakenly entered as +2
         ]);
 
-        $saleData = SaleData::where('orderid', $orderId)->firstOrFail();
+        $saleData = SaleData::query()->where('orderid', $orderId)->firstOrFail();
         $this->assertEquals(2, $saleData->count);
 
         // 2. User goes to Sold Registry -> clicks Edit -> changes count to -2
@@ -229,7 +229,7 @@ class SaleItemReturnTest extends TestCase
             'count' => [-2], // Accidentally entered as Return
         ]);
 
-        $saleData = SaleData::where('orderid', $orderId)->firstOrFail();
+        $saleData = SaleData::query()->where('orderid', $orderId)->firstOrFail();
         $this->assertEquals(-2, $saleData->count);
 
         // 2. Reverse via Edit: Change -2 to +2
@@ -264,4 +264,3 @@ class SaleItemReturnTest extends TestCase
         $this->assertDatabaseMissing('sales_lists', ['orderid' => $orderId]);
     }
 }
-

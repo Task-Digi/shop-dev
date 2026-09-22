@@ -82,6 +82,45 @@
             letter-spacing: 0;
         }
 
+        .zero-sales-toggle-card {
+            border: 1px solid #d8e2ee;
+            border-radius: 10px;
+            background: #f8fafc;
+        }
+
+        .zero-sales-toggle {
+            display: flex;
+            width: 100%;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.9rem 1rem;
+            border: 0;
+            background: transparent;
+            color: #334155;
+            font-weight: 600;
+            text-align: left;
+        }
+
+        .zero-sales-toggle:hover,
+        .zero-sales-toggle:focus {
+            color: #0056b3;
+            text-decoration: none;
+            outline: none;
+        }
+
+        .zero-sales-toggle .toggle-icon {
+            transition: transform 0.2s ease;
+        }
+
+        .zero-sales-toggle[aria-expanded="true"] .toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .zero-sales-panel-inner {
+            border-top: 1px solid #d8e2ee;
+            padding: 1rem;
+        }
+
         @media (max-width: 767.98px) {
             .sale-entry-card {
                 border-radius: 10px;
@@ -142,7 +181,7 @@
             <form method="POST" action="/home" id="saleForm">
                 @csrf
 
-                <div class="sale-item-box border rounded p-3 mt-4 mb-5">
+                <div class="sale-item-box border rounded p-3 mt-4 mb-3">
 
 
                     <div class="form-group row align-items-center">
@@ -229,7 +268,69 @@
                         </div>
 
                     </div>
+                </div>
             </form>
+
+            @php
+                $showZeroSalesPanel = $errors->has('zero_sales_date') || $errors->has('zero_sales_location');
+            @endphp
+            <div class="zero-sales-toggle-card mt-3 mb-4">
+                <button type="button" id="zeroSalesToggle" class="zero-sales-toggle"
+                    aria-expanded="{{ $showZeroSalesPanel ? 'true' : 'false' }}" aria-controls="zeroSalesPanel">
+                    <span>
+                        <i class="fa fa-calendar-times-o mr-2"></i>
+                        No sales for a day? <small class="text-muted ml-1">Record 0 Sales</small>
+                    </span>
+                    <span class="toggle-icon" aria-hidden="true">&#9660;</span>
+                </button>
+
+                <div id="zeroSalesPanel" class="collapse{{ $showZeroSalesPanel ? ' show' : '' }}">
+                    <div class="zero-sales-panel-inner">
+                        <p class="text-muted mb-3">Use this only when the selected shop had no sales. No order details are required.</p>
+                        <form method="POST" action="{{ route('saleitems.zero-sales.store') }}" class="form-row align-items-end mb-0">
+                            @csrf
+                            <div class="form-group col-md-4">
+                                <label for="zero_sales_location">Location</label>
+                                <select id="zero_sales_location" name="zero_sales_location" class="form-control" required>
+                                    <option value="ALNABRU" {{ old('zero_sales_location') === 'ALNABRU' ? 'selected' : '' }}>ALNABRU</option>
+                                    <option value="MAJORSTUEN" {{ old('zero_sales_location', 'MAJORSTUEN') === 'MAJORSTUEN' ? 'selected' : '' }}>MAJORSTUEN</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label for="zero_sales_date">Date</label>
+                                <input type="date" id="zero_sales_date" name="zero_sales_date" class="form-control"
+                                    value="{{ old('zero_sales_date', now()->toDateString()) }}" max="{{ now()->toDateString() }}" required>
+                            </div>
+                            <div class="form-group col-md-4">
+                                <button type="submit" class="btn btn-outline-primary btn-block">Save 0 Sales</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                document.addEventListener('DOMContentLoaded', function () {
+                    var toggle = document.getElementById('zeroSalesToggle');
+                    var panel = document.getElementById('zeroSalesPanel');
+
+                    if (!toggle || !panel) {
+                        return;
+                    }
+
+                    toggle.addEventListener('click', function () {
+                        var isOpen = panel.classList.toggle('show');
+                        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+
+                        if (isOpen) {
+                            var firstField = document.getElementById('zero_sales_location');
+                            if (firstField) {
+                                firstField.focus();
+                            }
+                        }
+                    });
+                });
+            </script>
         </div>
     </div>
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreSaleItemRequest;
 use App\Http\Requests\UpdateSaleItemRequest;
+use App\Http\Requests\StoreZeroSalesDayRequest;
 use App\Models\SalesList;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +13,7 @@ use App\Models\Product;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Log;
 use App\Services\SaleItemService;
+use Illuminate\Validation\ValidationException;
 
 class SaleItemController extends Controller
 {
@@ -66,9 +68,50 @@ class SaleItemController extends Controller
             $this->saleItemService->create($request->validated());
 
             return back()->with('success', 'Sale items created successfully!');
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             Log::error($e);
             return back()->with('error', 'Error storing sale items. Please try again.');
+        }
+    }
+
+    public function storeZeroSalesDay(StoreZeroSalesDayRequest $request)
+    {
+        $date = $request->validated('zero_sales_date');
+        $location = $request->validated('zero_sales_location');
+
+        try {
+            $created = DB::transaction(function () use ($date, $location): bool {
+                if (DB::table('sale_data')->where('date', $date)->where('location', $location)->exists()) {
+                    throw ValidationException::withMessages([
+                        'zero_sales_date' => 'Actual sales already exist for this location and date.',
+                    ]);
+                }
+
+                return DB::table('sales_reporting_days')->insertOrIgnore([
+                    'date' => $date,
+                    'location' => $location,
+                    'client' => 'The shop itself',
+                    'sales_amount' => 0,
+                    'confirmation_source' => 'Data Entry: confirmed by user',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]) === 1;
+            });
+
+            if (! $created) {
+                throw ValidationException::withMessages([
+                    'zero_sales_date' => 'A zero-sales record already exists for this location and date.',
+                ]);
+            }
+
+            return back()->with('success', "0 Sales recorded for {$location} on {$date}.");
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            Log::error($exception);
+            return back()->with('error', 'Unable to store the zero-sales day. Please try again.');
         }
     }
 
@@ -90,15 +133,15 @@ class SaleItemController extends Controller
         // Return the last submission date as JSON
         return response()->json(['lastSubmissionDate' => $lastSubmissionDate]);
     }
-    public function edit($id)
+    public function edit(int|string $id)
     {
-        $saleItem = SaleData::findOrFail($id);
+        $saleItem = SaleData::query()->findOrFail($id);
         return view('sale-items.edit', compact('saleItem'));
     }
 
-    public function update(UpdateSaleItemRequest $request, $id)
+    public function update(UpdateSaleItemRequest $request, int|string $id)
     {
-        $saleData = SaleData::find($id);
+        $saleData = SaleData::query()->find($id);
         if (!$saleData) {
             return redirect('/Dashboard')->with('error', 'Sale item not found. It may already have been deleted.');
         }
@@ -114,10 +157,10 @@ class SaleItemController extends Controller
         }
     }
 
-    public function destroy($id)
+    public function destroy(int|string $id)
     {
         try {
-            $saleData = SaleData::find($id);
+            $saleData = SaleData::query()->find($id);
 
             if (!$saleData) {
                 return redirect('/Dashboard')->with('error', 'Sale item not found. It may already have been deleted.');
@@ -136,7 +179,7 @@ class SaleItemController extends Controller
         $orderid = $request->input('orderid');
 
         // Check if the order ID already exists in the sale_list table
-        $existingOrder = SalesList::where('orderid', $orderid)->exists();
+        $existingOrder = SalesList::query()->where('orderid', $orderid)->exists();
 
         if ($existingOrder) {
             return response()->json(['error' => 'Order ID already exists']);
@@ -149,7 +192,7 @@ class SaleItemController extends Controller
         $productid = $request->input('productid');
 
         // Check if the order ID already exists in the sale_list table
-        $existingOrder = SalesList::where('productid', $productid)->exists();
+        $existingOrder = SalesList::query()->where('productid', $productid)->exists();
 
         if ($existingOrder) {
             return response()->json(['error' => 'productid  already exists']);
@@ -161,7 +204,7 @@ class SaleItemController extends Controller
     {
 
         $selectedDate = $request->selected_date;
-        $sales = SalesList::whereDate('date', $selectedDate)->get(); // Assuming your date column is named 'date'
+        $sales = SalesList::query()->where('date', $selectedDate)->get();
         return response()->json($sales);
     }
 

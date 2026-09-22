@@ -9,6 +9,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Collection;
 
 class ReportController extends Controller
 {
@@ -55,7 +59,7 @@ class ReportController extends Controller
         return DB::raw("MAX({$expr}) AS product_name");
     }
 
-    protected function applyProductNameSearch($query, string $searchName, string $saleAlias = 'sale_data', string $productAlias = 'products'): void
+    protected function applyProductNameSearch(Builder $query, string $searchName, string $saleAlias = 'sale_data', string $productAlias = 'products'): void
     {
         $like = '%' . addcslashes($searchName, '%_\\') . '%';
         $resolved = $this->resolvedProductNameSql($saleAlias, $productAlias);
@@ -75,15 +79,20 @@ class ReportController extends Controller
      */
     protected function latestSalesDates(int $count)
     {
-        return DB::table('sale_data')
-            ->select('date')
-            ->distinct()
+        $dates = DB::table('sale_data')->select('date');
+        if (Schema::hasTable('sales_reporting_days')) {
+            $dates->union(DB::table('sales_reporting_days')->select('date'));
+        }
+
+        return DB::query()->fromSub($dates, 'report_dates')
+            ->whereNotNull('date')
+            ->groupBy('date')
             ->orderBy('date', 'DESC')
             ->limit($count)
             ->pluck('date');
     }
 
-    public function index(Request $request, $customerId)
+    public function index(Request $request, string $customerId)
     {
         $request->validate([
             'days' => 'nullable|in:0,7,28,56',
@@ -333,7 +342,7 @@ class ReportController extends Controller
         return view('reports.graph');
     }
 
-    public function productIndex(Request $request, $productid)
+    public function productIndex(Request $request, string $productid)
     {
         $request->validate([
             'days' => 'nullable|in:7,28,56,all',
@@ -507,7 +516,7 @@ class ReportController extends Controller
         return response()->json($salesData);
     }
 
-    public function getSalesDataCustomer($customerId)
+    public function getSalesDataCustomer(string $customerId)
     {
         $dateFiftyDaysAgo = now()->subDays(29)->toDateString();
         // Query to get the sales data
@@ -541,7 +550,7 @@ class ReportController extends Controller
         }
 
         // Prepare the base query for sales data
-        $salesDataQuery = DB::table('sale_data')
+        $actualSalesDataQuery = DB::table('sale_data')
             ->select(
                 'date',
                 'location',
@@ -554,19 +563,52 @@ class ReportController extends Controller
                 DB::raw("SUM(CASE WHEN type = 'Fargerike' THEN count * price ELSE 0 END) AS fargerike_sales"),
                 $this->weightedUnitPriceAvg()
             )
-            ->groupBy('date', 'location')
-            ->orderBy('date', 'DESC');
+            ->groupBy('date', 'location');
+
+        if (Schema::hasTable('sales_reporting_days')) {
+            $zeroSalesDataQuery = DB::table('sales_reporting_days')->select(
+                'date',
+                'location',
+                DB::raw('0 AS customer_count'),
+                DB::raw('0 AS order_id_count'),
+                DB::raw('0 AS product_id_count'),
+                DB::raw('0 AS total_products_price'),
+                DB::raw('0 AS total_retail_value'),
+                DB::raw('0 AS mpp_sales'),
+                DB::raw('0 AS fargerike_sales'),
+                DB::raw('NULL AS unit_price_avg')
+            );
+            $salesDataQuery = DB::query()->fromSub($actualSalesDataQuery->unionAll($zeroSalesDataQuery), 'daily_sales');
+        } else {
+            $salesDataQuery = $actualSalesDataQuery;
+        }
+        $salesDataQuery->orderBy('date', 'DESC');
 
         // Prepare the query for total sales per day
-        $salesData1Query = DB::table('sale_data')
+        $actualDailyTotals = DB::table('sale_data')
             ->select(
                 'date', 
                 DB::raw('SUM(count * price) as total_sales'),
                 DB::raw("SUM(CASE WHEN type = 'MalProff MPP' THEN count * price ELSE 0 END) AS mpp_sales"),
                 DB::raw("SUM(CASE WHEN type = 'Fargerike' THEN count * price ELSE 0 END) AS fargerike_sales")
             )
-            ->groupBy('date')
-            ->orderBy('date', 'ASC');
+            ->groupBy('date');
+
+        if (Schema::hasTable('sales_reporting_days')) {
+            $zeroDailyTotals = DB::table('sales_reporting_days')->select(
+                'date',
+                DB::raw('0 AS total_sales'),
+                DB::raw('0 AS mpp_sales'),
+                DB::raw('0 AS fargerike_sales')
+            );
+            $salesData1Query = DB::query()
+                ->fromSub($actualDailyTotals->unionAll($zeroDailyTotals), 'daily_totals')
+                ->select('date', DB::raw('SUM(total_sales) AS total_sales'), DB::raw('SUM(mpp_sales) AS mpp_sales'), DB::raw('SUM(fargerike_sales) AS fargerike_sales'))
+                ->groupBy('date');
+        } else {
+            $salesData1Query = $actualDailyTotals;
+        }
+        $salesData1Query->orderBy('date', 'ASC');
 
         // Apply date filtering based on the input
         if ($searchDate) {
@@ -633,7 +675,7 @@ class ReportController extends Controller
      * @param  \Illuminate\Support\Collection<int, object>  $salesData1
      * @return array{labels: string[], values: float[]}
      */
-    protected function buildDailySalesChartSeries(?string $searchDate, $days, $salesData1): array
+    protected function buildDailySalesChartSeries(?string $searchDate, string|int|null $days, Collection $salesData1): array
     {
         $salesMap = [];
         foreach ($salesData1 as $row) {
@@ -682,7 +724,7 @@ class ReportController extends Controller
         return view('reports.dashboard');
     }
 
-    public function fetchCustomerData($saleId)
+    public function fetchCustomerData(int|string $saleId)
     {
         $customerData = SalesList::findOrFail($saleId)->customers;
 
@@ -690,7 +732,7 @@ class ReportController extends Controller
         return response()->json($customerData);
     }
 
-    public function getCustomersByDate(Request $request, $date)
+    public function getCustomersByDate(Request $request, string $date)
     {
         try {
             $query = DB::table('sale_data')
@@ -1115,7 +1157,7 @@ class ReportController extends Controller
                 Log::info("ICT product quantity updated successfully by EAN", [
                     'ean_code_base' => $eanCodeBase,
                     'quantity' => $quantity,
-                    'user' => auth()->id() ?? 'unknown'
+                    'user' => Auth::id() ?? 'unknown'
                 ]);
 
                 return response()->json([

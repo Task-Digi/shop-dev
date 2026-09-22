@@ -22,7 +22,7 @@ use App\Http\Controllers\MasterDataController;
 */
 
 // Authentication Routes
-Route::get('/', [AuthLoginController::class, 'showLoginForm'])->name('login');
+Route::redirect('/', '/Dashboard');
 Route::get('/login', [AuthLoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthLoginController::class, 'login']);
 
@@ -44,6 +44,7 @@ Route::get('/93WwgVzcc9shQaxnd34c', [SaleItemController::class, 'create'])->name
 Route::get('/create', [SaleItemController::class, 'create'])->name('saleitems.create');
 Route::get('/sale-items', [SaleItemController::class, 'datasearch'])->name('saleitems.index');
 Route::post('/home', [SaleItemController::class, 'store']);
+Route::post('/zero-sales-days', [SaleItemController::class, 'storeZeroSalesDay'])->name('saleitems.zero-sales.store');
 Route::get('/date-get', [SaleItemController::class, 'getLastSubmissionDate']);
 Route::get('/{id}/edit', [SaleItemController::class, 'edit']);
 Route::put('/{id}', [SaleItemController::class, 'update']);

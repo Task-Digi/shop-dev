@@ -25,7 +25,7 @@ class UpdateSaleItemRequest extends FormRequest
             'orderid' => [
                 'required', 'string', 'max:255',
                 Rule::unique('sales_lists', 'orderid')->where(function ($query) {
-                    $saleData = SaleData::find($this->route('id'));
+                    $saleData = SaleData::query()->find($this->route('id'));
 
                     return $saleData ? $query->where('orderid', '!=', $saleData->orderid) : $query;
                 }),
