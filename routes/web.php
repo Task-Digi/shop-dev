@@ -9,6 +9,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\AuthLoginController;
 use App\Http\Controllers\OrderDeliveryController;
 use App\Http\Controllers\MasterDataController;
+use App\Http\Controllers\TimesheetController;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +26,10 @@ use App\Http\Controllers\MasterDataController;
 Route::redirect('/', '/Dashboard');
 Route::get('/login', [AuthLoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthLoginController::class, 'login']);
+
+// Payroll / Timesheet Routes
+Route::get('/timesheet', [TimesheetController::class, 'index'])->name('timesheet.index');
+Route::post('/timesheet/download', [TimesheetController::class, 'download'])->name('timesheet.download');
 
 // Dashboard Routes
 Route::get('/Dashboard', [SaleItemController::class, 'datasearch'])->name('saleitems.view');
