@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * @mixin \Illuminate\Database\Eloquent\Builder
+ * @method static \Illuminate\Database\Eloquent\Builder where(mixed $column, mixed $value)
+ * @method static \Illuminate\Database\Eloquent\Builder whereIn(mixed $column, mixed $values)
  */
 class Product extends Model
 {

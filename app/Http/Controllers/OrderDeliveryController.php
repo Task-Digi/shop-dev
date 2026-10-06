@@ -9,6 +9,7 @@ use App\Models\OrderItem;
 use App\Models\OrderRecord;
 use App\Models\OrderScan;
 use App\Models\Product;
+use App\Services\SupplierOrderPriceCalculator;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -114,6 +115,8 @@ class OrderDeliveryController extends Controller
                 return trim((string)$h, "\xEF\xBB\xBF \t\n\r\0\x0B");
             }, $header);
 
+            $priceCalculator = app(SupplierOrderPriceCalculator::class);
+
             DB::beginTransaction();
             $invalidDates = ['0001-01-01', '0000-00-00', null];
 
@@ -200,7 +203,7 @@ class OrderDeliveryController extends Controller
                     $orderRecord->save();
                 }
 
-                $price = $this->parseNumber($data['Price'] ?? $data['Pris'] ?? $data['UnitPrice'] ?? $data['Enhetspris'] ?? 0);
+                $price = $priceCalculator->calculate($header, $row, $data);
                 $ean = $data['EAN'] ?? $data['GTIN'] ?? $data['Barcode'] ?? $data['Strekkode'] ?? null;
                 if ($ean !== null) $ean = trim((string)$ean);
 

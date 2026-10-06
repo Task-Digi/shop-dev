@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @method static \Illuminate\Database\Eloquent\Builder where(mixed $column, mixed $value)
+ */
 class OrderRecord extends Model
 {
     public const DELIVERY_LIST_PER_PAGE = 25;

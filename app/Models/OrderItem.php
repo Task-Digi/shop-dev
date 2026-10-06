@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @method static \Illuminate\Database\Eloquent\Builder where(mixed $column, mixed $value)
+ */
 class OrderItem extends Model
 {
     protected $table = 'order_items';
