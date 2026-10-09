@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class CustomerReportValidationTest extends TestCase
@@ -31,6 +32,13 @@ class CustomerReportValidationTest extends TestCase
                 (object) ['orderid' => '729862', 'sales_date' => '2026-08-18', 'total_products_sold' => 2],
             ]);
 
+        DB::shouldReceive('table->whereIn->whereColumn->select->groupBy->get')
+            ->once()
+            ->andReturn(collect());
+        DB::shouldReceive('raw')
+            ->times(3)
+            ->andReturnUsing(fn (string $expression) => $expression);
+
         $this->getJson('/CustomerReport/details?location=MAJORSTUEN&customer_id=10363&days=0')
             ->assertOk()
             ->assertJsonPath('0.sales_date', '2026-08-21')
@@ -42,6 +50,11 @@ class CustomerReportValidationTest extends TestCase
 
     public function test_customer_order_drill_down_uses_the_same_sales_dates_as_the_summary(): void
     {
+        Schema::shouldReceive('hasTable')
+            ->once()
+            ->with('sales_reporting_days')
+            ->andReturnFalse();
+
         DB::shouldReceive('table->select->distinct->orderBy->limit->pluck')
             ->once()
             ->with('date')

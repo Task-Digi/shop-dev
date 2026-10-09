@@ -73,6 +73,27 @@
             border-color: #f5c2c7;
         }
 
+        .productid-alert .product-id-info.product-id-valid {
+            color: #0f5132;
+            background-color: #d1e7dd;
+            border-color: #badbcc;
+        }
+
+        .return-panel {
+            border: 1px solid #b6d4fe;
+            border-radius: 8px;
+            background: #f0f6ff;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .return-availability {
+            display: block;
+            margin-top: 0.25rem;
+            color: #52606d;
+            font-size: 0.8rem;
+        }
+
         .productid-alert .product-id-info .product-id-duplicate-note {
             display: block;
             font-size: 0.72rem;
@@ -182,6 +203,23 @@
                 @csrf
 
                 <div class="sale-item-box border rounded p-3 mt-4 mb-3">
+
+                    <div class="return-panel">
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="is_return" name="is_return" value="1" {{ old('is_return') ? 'checked' : '' }}>
+                            <label class="custom-control-label font-weight-bold" for="is_return">Record a return from an existing order</label>
+                        </div>
+                        <div id="returnOrderFields" class="form-row align-items-end mt-2" style="display:none;">
+                            <div class="col-12 col-md-5">
+                                <label for="original_orderid">Original Order ID <small class="text-muted">(not Product ID)</small>:</label>
+                                <input type="text" id="original_orderid" name="original_orderid" class="form-control" value="{{ old('original_orderid') }}" maxlength="255" placeholder="Example: 849358" disabled>
+                            </div>
+                            <div class="col-12 col-md-3 mt-2 mt-md-0">
+                                <button type="button" id="loadOriginalOrder" class="btn btn-outline-primary btn-block">Load order</button>
+                            </div>
+                            <div class="col-12 col-md-4 mt-2 mt-md-0" id="return-order-status"></div>
+                        </div>
+                    </div>
 
 
                     <div class="form-group row align-items-center">
@@ -567,7 +605,8 @@
                     return;
                 }
 
-                var html = '<h6 class="alert alert-danger p-2 mb-0 product-id-info">';
+                var alertClass = options.isDuplicate ? 'alert-danger' : 'alert-success product-id-valid';
+                var html = '<h6 class="alert ' + alertClass + ' p-2 mb-0 product-id-info">';
                 if (options.isDuplicate) {
                     html += '<span class="product-id-duplicate-note">This product ID already exists.</span>';
                 }
@@ -681,6 +720,99 @@
             // Snapshot the very first row as our clone template BEFORE the user
             // can type into it, so cloned rows always start empty.
             var additionalFieldsTemplate = $('.additional-fields').first().clone(true);
+
+            function setReturnMode(enabled) {
+                $('#returnOrderFields').toggle(enabled);
+                $('#original_orderid').prop('disabled', !enabled).prop('required', enabled);
+                $('input[name="count[]"]').attr('min', enabled ? '1' : '-1000000')
+                    .attr('placeholder', enabled ? 'Quantity to return' : 'e.g. 2 or -2');
+                if (!enabled) {
+                    $('#orderid').prop('readonly', false);
+                    $('#return-order-status').empty();
+                    if (additionalFieldsContainer.find('input[name="productid[]"][readonly]').length) {
+                        var blankRow = additionalFieldsTemplate.clone(true);
+                        blankRow.find('input').val('');
+                        blankRow.find('.productid-alert').empty();
+                        additionalFieldsContainer.empty().append(blankRow);
+                    }
+                }
+            }
+
+            function renderReturnProducts(products) {
+                additionalFieldsContainer.empty();
+
+                (products || []).filter(function(product) {
+                    return Number(product.available_return_count) > 0;
+                }).forEach(function(product, index) {
+                    var row = additionalFieldsTemplate.clone(true);
+                    var productInput = row.find('input[name="productid[]"]');
+                    var countInput = row.find('input[name="count[]"]');
+
+                    row.find('input').val('');
+                    productInput.removeAttr('id').val(product.product_id).prop('readonly', true);
+                    countInput.attr({
+                        min: 1,
+                        max: product.available_return_count,
+                        placeholder: 'Max ' + product.available_return_count
+                    });
+                    row.find('.productid-alert').html(
+                        '<h6 class="alert alert-success product-id-info product-id-valid p-2 mb-0">' +
+                        formatProductNameLines(product.product_name || product.product_id) +
+                        '<span class="return-availability">Available to return: ' +
+                        escapeHtml(product.available_return_count) + ' of ' +
+                        escapeHtml(product.original_count) + '</span></h6>'
+                    );
+                    row.find('#addMoreFields').remove();
+                    row.find('.add-more-label').remove();
+                    additionalFieldsContainer.append(row);
+                });
+            }
+
+            $('#is_return').on('change', function() {
+                setReturnMode(this.checked);
+            });
+
+            $('#loadOriginalOrder').on('click', function() {
+                var originalOrderId = ($('#original_orderid').val() || '').trim();
+                if (!originalOrderId) {
+                    $('#return-order-status').html('<span class="text-danger">Enter the original Order ID.</span>');
+                    return;
+                }
+
+                var button = $(this).prop('disabled', true).text('Loading...');
+                $('#return-order-status').empty();
+                $.ajax({
+                    url: "{{ route('get_order_details') }}",
+                    method: 'GET',
+                    data: { orderid: originalOrderId },
+                    success: function(response) {
+                        var order = response.order || response;
+                        $('#orderid').val(order.orderid || originalOrderId).prop('readonly', true);
+                        $('#customerid').val(order.customer_id || '');
+                        $('#location').val(order.location || '');
+                        $('#type').val(order.type || '');
+                        $('#payment').val(order.payment || '');
+                        renderReturnProducts(order.products || []);
+                        var available = (order.products || []).filter(function(product) {
+                            return Number(product.available_return_count) > 0;
+                        }).length;
+                        $('#return-order-status').html(available
+                            ? '<span class="text-success">Order loaded. Enter return quantities below.</span>'
+                            : '<span class="text-danger">All products on this order have already been returned.</span>');
+                    },
+                    error: function(xhr) {
+                        var message = xhr.responseJSON && xhr.responseJSON.message
+                            ? xhr.responseJSON.message
+                            : 'Original order could not be loaded.';
+                        $('#return-order-status').html('<span class="text-danger">' + escapeHtml(message) + '</span>');
+                    },
+                    complete: function() {
+                        button.prop('disabled', false).text('Load order');
+                    }
+                });
+            });
+
+            setReturnMode($('#is_return').is(':checked'));
 
             // Use event delegation so EVERY "Add more" button (the one in the
             // first row and the ones in cloned rows) triggers the same behavior.

@@ -79,14 +79,21 @@ class ReportController extends Controller
      */
     protected function latestSalesDates(int $count)
     {
-        $dates = DB::table('sale_data')->select('date');
         if (Schema::hasTable('sales_reporting_days')) {
-            $dates->union(DB::table('sales_reporting_days')->select('date'));
+            $dates = DB::table('sale_data')->select('date')
+                ->union(DB::table('sales_reporting_days')->select('date'));
+
+            return DB::query()->fromSub($dates, 'report_dates')
+                ->whereNotNull('date')
+                ->groupBy('date')
+                ->orderBy('date', 'DESC')
+                ->limit($count)
+                ->pluck('date');
         }
 
-        return DB::query()->fromSub($dates, 'report_dates')
-            ->whereNotNull('date')
-            ->groupBy('date')
+        return DB::table('sale_data')
+            ->select('date')
+            ->distinct()
             ->orderBy('date', 'DESC')
             ->limit($count)
             ->pluck('date');
@@ -95,7 +102,7 @@ class ReportController extends Controller
     public function index(Request $request, string $customerId)
     {
         $request->validate([
-            'days' => 'nullable|in:0,7,28,56',
+            'days' => 'nullable|in:0,7,28,56,all,month,year',
             'per_page' => 'nullable|integer|in:10,25,50,100,200',
             'search' => 'nullable|string|max:100',
         ]);
@@ -126,7 +133,7 @@ class ReportController extends Controller
                 'sale_data.customer_id',
                 'sale_data.customer_name',
                 'customers.KS_exists',
-                DB::raw('COUNT(DISTINCT sale_data.orderid) as order_id_count'),
+                DB::raw('COUNT(DISTINCT CASE WHEN sale_data.count > 0 THEN sale_data.orderid END) as order_id_count'),
                 DB::raw('SUM(sale_data.count) as total_products_sold'),
                 DB::raw('SUM(sale_data.count * sale_data.price) as total_sales'),
                 $this->weightedUnitPriceAvg('sale_data')
@@ -139,9 +146,16 @@ class ReportController extends Controller
             )
             ->orderBy('total_sales', 'DESC');
 
-        // Period filter (days = 0 means all time). Otherwise use the latest
-        // distinct dates containing sales, not calendar days with gaps.
-        if ((string) $days !== '0' && $days != 0) {
+        // Period filter
+        if ($days === 'month') {
+            $startDate = now()->startOfMonth()->toDateString();
+            $salesData1Query->where('sale_data.date', '>=', $startDate);
+            $salesDataQuery->where('sale_data.date', '>=', $startDate);
+        } elseif ($days === 'year') {
+            $startDate = now()->startOfYear()->toDateString();
+            $salesData1Query->where('sale_data.date', '>=', $startDate);
+            $salesDataQuery->where('sale_data.date', '>=', $startDate);
+        } elseif ((string) $days !== '0' && $days !== 'all' && is_numeric($days) && (int) $days > 0) {
             $latestSalesDates = $this->latestSalesDates((int) $days);
             $salesData1Query->whereIn('sale_data.date', $latestSalesDates);
             $salesDataQuery->whereIn('sale_data.date', $latestSalesDates);
@@ -169,17 +183,11 @@ class ReportController extends Controller
             }
         }
 
-        // Execute the queries
-        // $salesData1 drives the (currently collapsed) chart, so we limit it to the top 100 to prevent memory exhaustion.
         $salesData1 = $salesData1Query->limit(100)->get();
 
-        // $salesData drives the main table — paginate it so the page stays
-        // fast even with thousands of customers, and so the user gets proper
-        // page navigation at the bottom.
         $perPage = (int) $request->input('per_page', 25);
         $salesData = $salesDataQuery->paginate($perPage)->withQueryString();
 
-        // Return both salesData and salesData1 to the view, along with search term
         return view('reports.customer', compact('salesData', 'salesData1', 'days', 'search', 'customerId'));
     }
 
@@ -189,7 +197,7 @@ class ReportController extends Controller
             $validator = Validator::make($request->all(), [
                 'location' => 'required|string|max:255',
                 'customer_id' => 'required|string|max:255',
-                'days' => 'required|in:0,7,28,56',
+                'days' => 'required|in:0,7,28,56,all,month,year',
             ]);
 
             if ($validator->fails()) {
@@ -200,26 +208,28 @@ class ReportController extends Controller
                 ], 422);
             }
 
-            // Retrieve inputs
             $location = $request->input('location');
             $customerId = $request->input('customer_id');
             $days = $request->input('days');
 
-            // Prepare the SQL query
             $query = "
                 SELECT
                     orderid,
-                    MAX(date) AS sales_date, -- Get the latest date for each order
+                    MAX(CASE WHEN original_orderid IS NOT NULL AND original_orderid <> orderid THEN original_orderid ELSE NULL END) AS original_orderid,
+                    MAX(date) AS sales_date,
                     location,
                     type,
                     payment,
                     customer_id,
                     customer_name,
                     MAX(crm_link) AS crm_link,
-                    ROUND(SUM(count * price), 2) AS total_sales, -- Total sales for the order
-                    ROUND(SUM(count * retail), 2) AS total_products_price, -- Total product price for the order
-                    SUM(count) AS total_products_sold, -- Total products sold for the order
-                    ROUND(SUM(count * price) / NULLIF(SUM(count), 0), 2) AS unit_price -- Weighted unit (cost) price for the order
+                    ROUND(SUM(count * price), 2) AS total_sales,
+                    ROUND(SUM(count * retail), 2) AS total_products_price,
+                    SUM(count) AS total_products_sold,
+                    ROUND(SUM(count * price) / NULLIF(SUM(count), 0), 2) AS unit_price,
+                    SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS gross_sold,
+                    ROUND(SUM(CASE WHEN count > 0 THEN count * price ELSE 0 END), 2) AS gross_sales,
+                    ROUND(SUM(CASE WHEN count > 0 THEN count * retail ELSE 0 END), 2) AS gross_retail
                 FROM
                     sale_data
                 WHERE
@@ -227,10 +237,16 @@ class ReportController extends Controller
                     AND customer_id = ?
             ";
 
-            // Use the same latest distinct sales dates as the summary query so
-            // its order count and the expanded rows always describe one period.
-            if ($days == 0) {
-                $params = [$location, $customerId]; // No date filter, just location and customer_id
+            if ($days == '0' || $days === 'all') {
+                $params = [$location, $customerId];
+            } elseif ($days === 'month') {
+                $startDate = now()->startOfMonth()->toDateString();
+                $query .= " AND date >= ?";
+                $params = [$location, $customerId, $startDate];
+            } elseif ($days === 'year') {
+                $startDate = now()->startOfYear()->toDateString();
+                $query .= " AND date >= ?";
+                $params = [$location, $customerId, $startDate];
             } else {
                 $salesDates = $this->latestSalesDates((int) $days)->values()->all();
                 if ($salesDates === []) {
@@ -241,7 +257,6 @@ class ReportController extends Controller
                 $params = array_merge([$location, $customerId], $salesDates);
             }
 
-            // Group and order the results
             $query .= "
                 GROUP BY
                     orderid, location, type, payment, customer_id, customer_name
@@ -250,12 +265,95 @@ class ReportController extends Controller
                     orderid DESC
             ";
 
-            // Fetch data from the database
             $customerData = DB::select($query, $params);
 
+            // Fetch any returns linked to these orders
+            $orderIds = array_filter(array_map(fn($o) => (string)($o->orderid ?? ''), $customerData));
+            $returnsByParent = [];
+            if (!empty($orderIds)) {
+                $linkedReturns = DB::table('sale_data')
+                    ->whereIn('original_orderid', $orderIds)
+                    ->whereColumn('original_orderid', '!=', 'orderid')
+                    ->select(
+                        'original_orderid',
+                        'orderid',
+                        DB::raw('SUM(count) AS returned_count'),
+                        DB::raw('SUM(count * price) AS returned_sales'),
+                        DB::raw('SUM(count * retail) AS returned_retail')
+                    )
+                    ->groupBy('original_orderid', 'orderid')
+                    ->get();
+
+                $returnsByParent = $linkedReturns->groupBy('original_orderid');
+            }
+
+            foreach ($customerData as $order) {
+                $origId = (string) $order->orderid;
+                $isLinkedReturn = !empty($order->original_orderid ?? null);
+
+                if ($isLinkedReturn) {
+                    $order->is_return = true;
+                    $order->is_linked_return = true;
+                    $order->has_returns = false;
+                    $order->gross_products_sold = 0;
+                    $order->gross_sales = 0.00;
+                    $order->returned_products_sold = abs((int) $order->total_products_sold);
+                    $order->returned_count = $order->returned_products_sold;
+                    $order->returned_sales = abs((float) $order->total_sales);
+                    $order->return_orderids = [];
+                } elseif (isset($returnsByParent[$origId])) {
+                    $order->is_return = false;
+                    $parentReturns = $returnsByParent[$origId];
+                    $retQty = abs((int) $parentReturns->sum('returned_count'));
+                    $retAmount = abs((float) $parentReturns->sum('returned_sales'));
+                    $retRetail = abs((float) $parentReturns->sum('returned_retail'));
+
+                    $grossQty = (int) ($order->gross_sold ?? $order->total_products_sold);
+                    $grossSales = (float) ($order->gross_sales ?? $order->total_sales);
+                    $grossRetail = (float) ($order->gross_retail ?? $order->total_products_price);
+
+                    $netQty = $grossQty - $retQty;
+                    $netSales = round($grossSales - $retAmount, 2);
+                    $netRetail = round($grossRetail - $retRetail, 2);
+
+                    $order->total_products_sold = $netQty;
+                    $order->total_sales = $netSales;
+                    $order->total_products_price = $netRetail;
+                    $order->unit_price = $netQty != 0 ? round($netSales / $netQty, 2) : ($grossQty != 0 ? round($grossSales / $grossQty, 2) : 0.00);
+
+                    $order->has_returns = true;
+                    $order->is_linked_return = false;
+                    $order->gross_products_sold = $grossQty;
+                    $order->gross_sales = round($grossSales, 2);
+                    $order->returned_products_sold = $retQty;
+                    $order->returned_count = $retQty;
+                    $order->returned_sales = round($retAmount, 2);
+                    $order->return_orderids = $parentReturns->pluck('orderid')->unique()->values()->all();
+                } else {
+                    $grossQty = (int) ($order->gross_sold ?? $order->total_products_sold);
+                    $netQty = (int) $order->total_products_sold;
+                    $sameOrderReturned = max(0, $grossQty - $netQty);
+                    $order->is_return = $grossQty === 0 && $netQty < 0;
+                    $order->has_returns = $sameOrderReturned > 0;
+                    $order->is_linked_return = false;
+                    $order->gross_products_sold = $grossQty;
+                    $order->gross_sales = (float) ($order->gross_sales ?? $order->total_sales ?? 0);
+                    $order->returned_products_sold = $sameOrderReturned;
+                    $order->returned_count = $sameOrderReturned;
+                    $order->returned_sales = max(0, round($order->gross_sales - (float) ($order->total_sales ?? 0), 2));
+                    $order->return_orderids = [];
+                }
+            }
+
+            // Calculate daily totals: linked returns are already subtracted from parent order, so skip them to prevent double deduction
             $dailyTotals = collect($customerData)
                 ->groupBy('sales_date')
-                ->map(fn ($orders) => $orders->sum(fn ($order) => (float) $order->total_products_sold));
+                ->map(fn ($orders) => $orders->sum(function ($order) {
+                    if (!empty($order->is_linked_return)) {
+                        return 0; // Prevent deducting twice
+                    }
+                    return (float) $order->total_products_sold;
+                }));
 
             foreach ($customerData as $order) {
                 $order->daily_total_orders = $dailyTotals->get($order->sales_date, 0);
@@ -274,7 +372,7 @@ class ReportController extends Controller
     public function exportCustomers(Request $request)
     {
         $request->validate([
-            'days' => 'nullable|in:0,7,28,56',
+            'days' => 'nullable|in:0,7,28,56,all,month,year',
             'search' => 'nullable|string|max:100',
             'customer_id' => 'nullable|string|max:255',
         ]);
@@ -288,7 +386,7 @@ class ReportController extends Controller
                 'location',
                 'customer_id',
                 'customer_name',
-                DB::raw('COUNT(DISTINCT orderid) as order_count'),
+                DB::raw('COUNT(DISTINCT CASE WHEN count > 0 THEN orderid END) as order_count'),
                 DB::raw('SUM(count) as quantity_sold'),
                 $this->weightedUnitPriceAvg(),
                 DB::raw('SUM(count * price) as total_sales')
@@ -296,7 +394,11 @@ class ReportController extends Controller
             ->groupBy('location', 'customer_id', 'customer_name')
             ->orderBy('total_sales', 'DESC');
 
-        if ($days !== '0') {
+        if ($days === 'month') {
+            $query->where('date', '>=', now()->startOfMonth()->toDateString());
+        } elseif ($days === 'year') {
+            $query->where('date', '>=', now()->startOfYear()->toDateString());
+        } elseif ($days !== '0' && $days !== 'all' && is_numeric($days) && (int) $days > 0) {
             $query->whereIn('date', $this->latestSalesDates((int) $days));
         }
 
@@ -311,8 +413,12 @@ class ReportController extends Controller
         }
 
         $filename = 'customer-sales-' . now()->format('Y-m-d') . '.csv';
-
-        $periodLabel = $days === '0' ? 'All time' : "Last {$days} sales days";
+        $periodLabel = match ($days) {
+            '0', 'all' => 'All time',
+            'month' => 'Current month',
+            'year' => 'Current year',
+            default => "Last {$days} sales days",
+        };
 
         return response()->streamDownload(function () use ($query, $periodLabel, $search) {
             $output = fopen('php://output', 'w');
@@ -345,7 +451,7 @@ class ReportController extends Controller
     public function productIndex(Request $request, string $productid)
     {
         $request->validate([
-            'days' => 'nullable|in:7,28,56,all',
+            'days' => 'nullable|in:7,28,56,all,month,year',
             'per_page' => 'nullable|integer|in:10,25,50,100,200',
             'search' => 'nullable|string|max:100',
         ]);
@@ -353,13 +459,10 @@ class ReportController extends Controller
         $days = $request->input('days', 7);
         $searchName = trim((string) $request->input('search', ''));
 
-        // Period/search form posts to ProductName route; without a search term that must mean "all".
         if ($productid === 'ProductName' && $searchName === '') {
             $productid = 'all';
         }
 
-        // Only products that exist in the catalog (products table). Orphan sale_data rows
-        // (e.g. mistyped product_id with no products row) are excluded from this report.
         $salesDataQuery = DB::table('sale_data')
             ->join('products', 'sale_data.product_id', '=', 'products.product_id')
             ->select(
@@ -367,7 +470,7 @@ class ReportController extends Controller
                 $this->resolvedProductNameSelect(),
                 'sale_data.location',
                 DB::raw('COUNT(DISTINCT sale_data.customer_id) AS customer_count'),
-                DB::raw('COUNT(DISTINCT sale_data.orderid) AS order_id_count'),
+                DB::raw('COUNT(DISTINCT CASE WHEN sale_data.count > 0 THEN sale_data.orderid END) AS order_id_count'),
                 DB::raw('SUM(sale_data.count) AS product_id_count'),
                 DB::raw('SUM(sale_data.count * sale_data.price) AS total_products_price'),
                 $this->weightedUnitPriceAvg('sale_data')
@@ -377,7 +480,6 @@ class ReportController extends Controller
             ->groupBy('sale_data.product_id', 'sale_data.location')
             ->orderBy('product_name', 'ASC');
 
-        // Base query to retrieve total sales per product for graph data
         $salesData1Query = DB::table('sale_data')
             ->join('products', 'sale_data.product_id', '=', 'products.product_id')
             ->select(
@@ -389,16 +491,21 @@ class ReportController extends Controller
             ->groupBy('sale_data.product_id')
             ->orderBy('product_name', 'ASC');
 
-        // Apply the latest distinct sales-date filter if not set to all time.
-        if ($days !== 'all') {
+        if ($days === 'month') {
+            $startDate = now()->startOfMonth()->toDateString();
+            $salesDataQuery->where('sale_data.date', '>=', $startDate);
+            $salesData1Query->where('sale_data.date', '>=', $startDate);
+        } elseif ($days === 'year') {
+            $startDate = now()->startOfYear()->toDateString();
+            $salesDataQuery->where('sale_data.date', '>=', $startDate);
+            $salesData1Query->where('sale_data.date', '>=', $startDate);
+        } elseif ($days !== 'all' && is_numeric($days) && (int) $days > 0) {
             $latestSalesDates = $this->latestSalesDates((int) $days);
             $salesDataQuery->whereIn('sale_data.date', $latestSalesDates);
             $salesData1Query->whereIn('sale_data.date', $latestSalesDates);
         }
 
-        // Apply filters based on search text, product id route, or all products
         if ($searchName !== '') {
-            // Exact catalog id match → only that product (all locations still listed separately)
             $exactProductId = DB::table('products')
                 ->where('product_id', $searchName)
                 ->value('product_id');
@@ -427,21 +534,17 @@ class ReportController extends Controller
             $product_name = 'All Products';
         }
 
-        // Paginate the main product table so the page stays fast even with
-        // thousands of product/location combos. The graph data ($salesData1)
-        // is kept as a plain collection for the (collapsed) chart.
         $perPage = (int) $request->input('per_page', 25);
         $salesData  = $salesDataQuery->paginate($perPage)->withQueryString();
         $salesData1 = $salesData1Query->limit(100)->get();
 
-        // Return the view with necessary data
         return view('reports.product', compact('salesData', 'salesData1', 'product_name', 'productid', 'days', 'searchName'));
     }
 
     public function exportProducts(Request $request)
     {
         $request->validate([
-            'days' => 'nullable|in:7,28,56,all',
+            'days' => 'nullable|in:7,28,56,all,month,year',
             'search' => 'nullable|string|max:100',
             'product_id' => 'nullable|string|max:255',
         ]);
@@ -457,15 +560,21 @@ class ReportController extends Controller
                 $this->resolvedProductNameSelect(),
                 'sale_data.location',
                 DB::raw('COUNT(DISTINCT sale_data.customer_id) AS customer_count'),
-                DB::raw('COUNT(DISTINCT sale_data.orderid) AS order_count'),
-                DB::raw('SUM(sale_data.count) AS quantity_sold'),
-                $this->weightedUnitPriceAvg('sale_data'),
-                DB::raw('SUM(sale_data.count * sale_data.price) AS total_sales')
+                DB::raw('COUNT(DISTINCT CASE WHEN sale_data.count > 0 THEN sale_data.orderid END) AS order_id_count'),
+                DB::raw('SUM(sale_data.count) AS product_id_count'),
+                DB::raw('SUM(sale_data.count * sale_data.price) AS total_products_price'),
+                $this->weightedUnitPriceAvg('sale_data')
             )
+            ->whereNotNull('sale_data.product_id')
+            ->where('sale_data.product_id', '!=', '')
             ->groupBy('sale_data.product_id', 'sale_data.location')
-            ->orderBy('total_sales', 'DESC');
+            ->orderBy('product_name', 'ASC');
 
-        if ($days !== 'all') {
+        if ($days === 'month') {
+            $query->where('sale_data.date', '>=', now()->startOfMonth()->toDateString());
+        } elseif ($days === 'year') {
+            $query->where('sale_data.date', '>=', now()->startOfYear()->toDateString());
+        } elseif ($days !== 'all' && is_numeric($days) && (int) $days > 0) {
             $query->whereIn('sale_data.date', $this->latestSalesDates((int) $days));
         }
 
@@ -475,7 +584,13 @@ class ReportController extends Controller
             $query->where('sale_data.product_id', $productId);
         }
 
-        $periodLabel = $days === 'all' ? 'All time' : "Last {$days} sales days";
+        $filename = 'product-sales-' . now()->format('Y-m-d') . '.csv';
+        $periodLabel = match ($days) {
+            'all' => 'All time',
+            'month' => 'Current month',
+            'year' => 'Current year',
+            default => "Last {$days} sales days",
+        };
 
         return response()->streamDownload(function () use ($query, $periodLabel, $search) {
             $output = fopen('php://output', 'w');
@@ -483,28 +598,28 @@ class ReportController extends Controller
             fputcsv($output, ['Search', $search !== '' ? $search : 'All products']);
             fputcsv($output, []);
             fputcsv($output, ['Product ID', 'Product Name', 'Location', 'Customers', 'Orders', 'Sold', 'Unit Price', 'Total Sales']);
+
             foreach ($query->cursor() as $row) {
                 fputcsv($output, [
                     $row->product_id,
                     $row->product_name,
                     $row->location,
                     $row->customer_count,
-                    $row->order_count,
-                    $row->quantity_sold,
+                    $row->order_id_count,
+                    $row->product_id_count,
                     $row->unit_price_avg,
-                    $row->total_sales,
+                    $row->total_products_price,
                 ]);
             }
+
             fclose($output);
-        }, 'product-sales-' . now()->format('Y-m-d') . '.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function getSalesData()
     {
-        // Calculate the date 50 days ago
         $dateFiftyDaysAgo = now()->subDays(29)->toDateString();
 
-        // Query to get the sales data
         $salesData = DB::table('sales_lists')
             ->select(DB::raw('date, SUM(count * price) as total_sales'))
             ->join('products', 'sales_lists.productid', '=', 'products.product_id')
@@ -519,7 +634,7 @@ class ReportController extends Controller
     public function getSalesDataCustomer(string $customerId)
     {
         $dateFiftyDaysAgo = now()->subDays(29)->toDateString();
-        // Query to get the sales data
+
         $salesData = DB::table('sales_lists')
             ->select(DB::raw('date, SUM(count * price) as total_sales'))
             ->join('products', 'sales_lists.productid', '=', 'products.product_id')
@@ -535,13 +650,12 @@ class ReportController extends Controller
     public function viewIndex(Request $request)
     {
         $request->validate([
-            'days' => 'nullable|in:7,28,56,all',
+            'days' => 'nullable|in:7,28,56,all,month,year',
             'searchDate' => 'nullable|date_format:Y-m-d',
             'per_page' => 'nullable|integer|in:25,50,100',
         ]);
 
-        // Get the 'days' and 'searchDate' values from the request
-        $days = $request->input('days', 7); // Default to 7 days if no selection is provided
+        $days = $request->input('days', 7);
         $searchDate = $request->input('searchDate');
         $perPage = (int) $request->input('per_page', 25);
 
@@ -549,16 +663,18 @@ class ReportController extends Controller
             $perPage = 25;
         }
 
-        // Prepare the base query for sales data
         $actualSalesDataQuery = DB::table('sale_data')
             ->select(
                 'date',
                 'location',
                 DB::raw('COUNT(DISTINCT customer_id) AS customer_count'),
-                DB::raw('COUNT(DISTINCT orderid) AS order_id_count'),
+                DB::raw('COUNT(DISTINCT CASE WHEN count > 0 THEN orderid END) AS order_id_count'),
+                DB::raw('COUNT(DISTINCT CASE WHEN count < 0 THEN orderid END) AS return_order_count'),
                 DB::raw('SUM(count) AS product_id_count'),
                 DB::raw('SUM(count * price) AS total_products_price'),
                 DB::raw('SUM(count * retail) AS total_retail_value'),
+                DB::raw("SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS gross_sold"),
+                DB::raw("SUM(CASE WHEN count < 0 THEN ABS(count) ELSE 0 END) AS returned_sold"),
                 DB::raw("SUM(CASE WHEN type = 'MalProff MPP' THEN count * price ELSE 0 END) AS mpp_sales"),
                 DB::raw("SUM(CASE WHEN type = 'Fargerike' THEN count * price ELSE 0 END) AS fargerike_sales"),
                 $this->weightedUnitPriceAvg()
@@ -571,9 +687,12 @@ class ReportController extends Controller
                 'location',
                 DB::raw('0 AS customer_count'),
                 DB::raw('0 AS order_id_count'),
+                DB::raw('0 AS return_order_count'),
                 DB::raw('0 AS product_id_count'),
                 DB::raw('0 AS total_products_price'),
                 DB::raw('0 AS total_retail_value'),
+                DB::raw('0 AS gross_sold'),
+                DB::raw('0 AS returned_sold'),
                 DB::raw('0 AS mpp_sales'),
                 DB::raw('0 AS fargerike_sales'),
                 DB::raw('NULL AS unit_price_avg')
@@ -584,7 +703,6 @@ class ReportController extends Controller
         }
         $salesDataQuery->orderBy('date', 'DESC');
 
-        // Prepare the query for total sales per day
         $actualDailyTotals = DB::table('sale_data')
             ->select(
                 'date', 
@@ -610,36 +728,26 @@ class ReportController extends Controller
         }
         $salesData1Query->orderBy('date', 'ASC');
 
-        // Apply date filtering based on the input
         if ($searchDate) {
-            // If a specific date is searched, filter by that date
-            // `date` is already a DATE column, so a direct comparison can use
-            // an index while WHERE DATE(date) generally cannot.
             $salesDataQuery->where('date', $searchDate);
             $salesData1Query->where('date', $searchDate);
             $days = null;
-        } elseif ($days && $days !== 'all') {
-            // "Last N days" means the latest N distinct dates that actually
-            // contain sales, rather than N calendar dates with empty days omitted.
-            $salesDayCount = (int) $days;
-            // Resolve this small list first because older MariaDB versions do
-            // not support LIMIT inside an IN subquery.
-            $latestSalesDates = $this->latestSalesDates($salesDayCount);
-
+        } elseif ($days === 'month') {
+            $startDate = now()->startOfMonth()->toDateString();
+            $salesDataQuery->where('date', '>=', $startDate);
+            $salesData1Query->where('date', '>=', $startDate);
+        } elseif ($days === 'year') {
+            $startDate = now()->startOfYear()->toDateString();
+            $salesDataQuery->where('date', '>=', $startDate);
+            $salesData1Query->where('date', '>=', $startDate);
+        } elseif ($days && $days !== 'all' && is_numeric($days) && (int) $days > 0) {
+            $latestSalesDates = $this->latestSalesDates((int) $days);
             $salesDataQuery->whereIn('date', $latestSalesDates);
             $salesData1Query->whereIn('date', $latestSalesDates);
         }
-        // No filter applied for 'all' days selection, as it fetches all records
 
-        // Keep the drill-down table bounded. The selected filters and page size
-        // remain in the URL while the user moves through the result pages.
-        $salesData = $salesDataQuery
-            ->paginate($perPage)
-            ->withQueryString();
+        $salesData = $salesDataQuery->paginate($perPage)->withQueryString();
 
-        // An all-time daily chart can create a very large JSON/DOM payload. The
-        // table above still covers the complete history; only the chart is
-        // bounded to the most recent 366 calendar days for browser performance.
         $chartLimited = false;
         if (!$searchDate && $days === 'all') {
             $chartStartDate = now()->subDays(365)->toDateString();
@@ -649,10 +757,8 @@ class ReportController extends Controller
 
         $salesData1 = $salesData1Query->get();
 
-        // Full calendar-aligned series for the chart (same filters as $salesData1)
         $chartSeries = $this->buildDailySalesChartSeries($searchDate, $days, $salesData1);
 
-        // Assuming you want to initialize the customer_name and customerId variables
         $customer_name = "";
         $customerId = "";
 
@@ -669,12 +775,6 @@ class ReportController extends Controller
         ));
     }
 
-    /**
-     * Build the graph series from the selected sales dates so it matches the table.
-     *
-     * @param  \Illuminate\Support\Collection<int, object>  $salesData1
-     * @return array{labels: string[], values: float[]}
-     */
     protected function buildDailySalesChartSeries(?string $searchDate, string|int|null $days, Collection $salesData1): array
     {
         $salesMap = [];
@@ -727,8 +827,6 @@ class ReportController extends Controller
     public function fetchCustomerData(int|string $saleId)
     {
         $customerData = SalesList::findOrFail($saleId)->customers;
-
-        // Return customer data as JSON response
         return response()->json($customerData);
     }
 
@@ -744,7 +842,8 @@ class ReportController extends Controller
                     'crm_exists',
                     'crm_link',
                     'crm_id',
-                    DB::raw('COUNT(DISTINCT orderid) AS order_count'),
+                    DB::raw('COUNT(DISTINCT CASE WHEN count > 0 THEN orderid END) AS order_count'),
+                    DB::raw('COUNT(DISTINCT CASE WHEN count < 0 THEN orderid END) AS return_count'),
                     DB::raw('SUM(count) AS product_count'),
                     DB::raw('ROUND(SUM(count * price), 2) AS total_price'),
                     DB::raw("ROUND(SUM(CASE WHEN type = 'MalProff MPP' THEN count * price ELSE 0 END), 2) AS mpp_sales"),
@@ -753,8 +852,6 @@ class ReportController extends Controller
                 )
                 ->where('date', $date);
 
-            // The parent report is grouped by date + location. Restricting the
-            // drill-down to that location avoids fetching unrelated customers.
             if ($request->filled('location')) {
                 $query->where('location', $request->input('location'));
             }
@@ -769,11 +866,6 @@ class ReportController extends Controller
         }
     }
 
-    /**
-     * Update KS_exists flag for a customer.
-     * Receives JSON: { customer_id: string|int, KS_exists: 0|1 }
-     * Only updates the customers table to avoid changing other existing behaviour.
-     */
     public function updateKsStatus(Request $request)
     {
         try {
@@ -793,7 +885,6 @@ class ReportController extends Controller
             $customerId = (string) $request->input('customer_id');
             $ksExists = (int) $request->input('KS_exists');
 
-            // Update only the customers table as requested
             DB::table('customers')->where('customer_id', $customerId)->update(['KS_exists' => $ksExists]);
 
             return response()->json(['success' => true, 'message' => 'KS status updated successfully']);
@@ -854,25 +945,71 @@ class ReportController extends Controller
             $location = $request->input('location');
             $customerId = $request->input('customer_id');
 
-            // Execute raw SQL query to fetch customer data from the sale_data table
             $customerData = DB::select("
-            SELECT
-                orderid,
-                date AS sales_date,
-                location,
-                customer_name,
-                SUM(count) AS product_count,
-                ROUND(SUM(count * price), 2) AS total_product_count,
-                ROUND(SUM(count * price) / NULLIF(SUM(count), 0), 2) AS unit_price
-            FROM
-                sale_data
-            WHERE
-                date = ?
-                AND location = ?
-                AND customer_id = ?
-            GROUP BY
-                orderid, date, location, customer_name
-        ", [$date, $location, $customerId]);
+                SELECT
+                    orderid,
+                    MAX(original_orderid) AS original_orderid,
+                    date AS sales_date,
+                    location,
+                    customer_name,
+                    SUM(count) AS product_count,
+                    ROUND(SUM(count * price), 2) AS total_product_count,
+                    ROUND(SUM(count * price) / NULLIF(SUM(count), 0), 2) AS unit_price,
+                    SUM(CASE WHEN count > 0 THEN count ELSE 0 END) AS gross_count,
+                    ROUND(SUM(CASE WHEN count > 0 THEN count * price ELSE 0 END), 2) AS gross_sales
+                FROM
+                    sale_data
+                WHERE
+                    date = ?
+                    AND location = ?
+                    AND customer_id = ?
+                GROUP BY
+                    orderid, date, location, customer_name
+            ", [$date, $location, $customerId]);
+
+            $orderIds = array_filter(array_map(fn($o) => (string)($o->orderid ?? ''), $customerData));
+            $returnsByParent = [];
+            if (!empty($orderIds)) {
+                $linkedReturns = DB::table('sale_data')
+                    ->whereIn('original_orderid', $orderIds)
+                    ->select(
+                        'original_orderid',
+                        DB::raw('SUM(count) AS returned_count'),
+                        DB::raw('SUM(count * price) AS returned_sales')
+                    )
+                    ->groupBy('original_orderid')
+                    ->get()
+                    ->keyBy('original_orderid');
+                $returnsByParent = $linkedReturns;
+            }
+
+            foreach ($customerData as $order) {
+                $origId = (string) $order->orderid;
+                $isLinkedReturn = !empty($order->original_orderid);
+
+                if ($isLinkedReturn) {
+                    $order->is_linked_return = true;
+                    $order->has_returns = false;
+                } elseif (isset($returnsByParent[$origId])) {
+                    $ret = $returnsByParent[$origId];
+                    $retQty = abs((int) $ret->returned_count);
+                    $retSales = abs((float) $ret->returned_sales);
+                    $grossQty = (int) $order->gross_count;
+                    $grossSales = (float) $order->gross_sales;
+
+                    $order->product_count = $grossQty - $retQty;
+                    $order->total_product_count = round($grossSales - $retSales, 2);
+                    $order->unit_price = $order->product_count != 0 ? round($order->total_product_count / $order->product_count, 2) : 0.00;
+                    $order->gross_count = $grossQty;
+                    $order->returned_count = $retQty;
+                    $order->has_returns = true;
+                    $order->is_linked_return = false;
+                } else {
+                    $order->has_returns = false;
+                    $order->is_linked_return = false;
+                    $order->returned_count = 0;
+                }
+            }
 
             return response()->json($customerData);
         } catch (\Exception $e) {
@@ -884,7 +1021,7 @@ class ReportController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'days' => 'required|in:7,28,56,all',
+                'days' => 'required|in:7,28,56,all,month,year',
                 'location' => 'required|string|max:255',
                 'product_id' => 'required|string|max:255',
             ]);
@@ -897,12 +1034,10 @@ class ReportController extends Controller
                 ], 422);
             }
 
-            // Retrieve input values
             $days = $request->input('days');
             $location = $request->input('location');
             $product_id = $request->input('product_id');
 
-            // Prepare the base query for fetching product data
             $productDataQuery = DB::table('sale_data')
                 ->join('products', 'sale_data.product_id', '=', 'products.product_id')
                 ->select(
@@ -911,13 +1046,12 @@ class ReportController extends Controller
                     'sale_data.product_id',
                     $this->resolvedProductNameSelect(),
                     DB::raw('COUNT(DISTINCT sale_data.customer_id) AS customer_count'),
-                    DB::raw('COUNT(DISTINCT sale_data.orderid) AS order_id_count'),
+                    DB::raw('COUNT(DISTINCT CASE WHEN sale_data.count > 0 THEN sale_data.orderid END) AS order_id_count'),
                     DB::raw('SUM(sale_data.count) AS product_quantity_sold'),
                     DB::raw('SUM(sale_data.count * sale_data.price) AS total_sales'),
                     $this->weightedUnitPriceAvg('sale_data')
                 );
 
-            // Apply filters based on user input
             if ($location) {
                 $productDataQuery->where('sale_data.location', $location);
             }
@@ -926,21 +1060,21 @@ class ReportController extends Controller
                 $productDataQuery->where('sale_data.product_id', $product_id);
             }
 
-            // Use the same distinct sales-day period as the parent report.
-            if ($days && $days !== 'all') {
+            if ($days === 'month') {
+                $productDataQuery->where('sale_data.date', '>=', now()->startOfMonth()->toDateString());
+            } elseif ($days === 'year') {
+                $productDataQuery->where('sale_data.date', '>=', now()->startOfYear()->toDateString());
+            } elseif ($days && $days !== 'all' && is_numeric($days) && (int) $days > 0) {
                 $productDataQuery->whereIn('sale_data.date', $this->latestSalesDates((int) $days));
             }
 
-            // Group by date, location, and product_id (not product_name) to avoid duplicate drill-down rows
             $productDataQuery->groupBy('sale_data.date', 'sale_data.location', 'sale_data.product_id')
                 ->orderBy('sale_data.date', 'DESC')
                 ->orderBy('sale_data.location')
                 ->orderBy('sale_data.product_id');
 
-            // Execute the query
             $productData = $productDataQuery->get();
 
-            // Return the response as JSON
             return response()->json($productData);
         } catch (\Exception $e) {
             Log::error('Failed to load product drill-down', [
@@ -968,49 +1102,81 @@ class ReportController extends Controller
         }
 
         try {
-        $date = $request->input('date');
-        $location = $request->input('location');
-        $productId = $request->input('productId');
+            $date = $request->input('date');
+            $location = $request->input('location');
+            $productId = $request->input('productId');
 
-        $query = DB::table('sale_data')
-            ->leftJoin('order_records', 'sale_data.orderid', '=', 'order_records.order_id')
-            ->select(
-                'sale_data.date as sale_date',
-                'order_records.order_date as order_date',
-                'sale_data.location',
-                'sale_data.orderid',
-                'sale_data.customer_name',
-                'sale_data.crm_link',
-                'sale_data.count',
-                'sale_data.price',
-                DB::raw('ROUND(sale_data.count * sale_data.price, 2) AS line_total')
-            );
+            $query = DB::table('sale_data')
+                ->leftJoin('order_records', 'sale_data.orderid', '=', 'order_records.order_id')
+                ->select(
+                    'sale_data.date as sale_date',
+                    'order_records.order_date as order_date',
+                    'sale_data.location',
+                    'sale_data.orderid',
+                    'sale_data.original_orderid',
+                    'sale_data.customer_name',
+                    'sale_data.crm_link',
+                    'sale_data.count',
+                    'sale_data.price',
+                    DB::raw('ROUND(sale_data.count * sale_data.price, 2) AS line_total')
+                );
 
-        if ($date) {
-            $query->whereDate('sale_data.date', '=', $date);
-        }
+            if ($date) {
+                $query->whereDate('sale_data.date', '=', $date);
+            }
 
-        if ($productId) {
-            $query->where('sale_data.product_id', $productId);
-        }
+            if ($productId) {
+                $query->where('sale_data.product_id', $productId);
+            }
 
-        if ($location) {
-            $query->where('sale_data.location', $location);
-        }
+            if ($location) {
+                $query->where('sale_data.location', $location);
+            }
 
-        $rows = $query
-            ->orderBy('sale_data.date', 'DESC')
-            ->orderBy('sale_data.orderid', 'DESC')
-            ->get();
+            $rows = $query
+                ->orderBy('sale_data.date', 'DESC')
+                ->orderBy('sale_data.orderid', 'DESC')
+                ->get();
 
-        foreach ($rows as $row) {
-            $oid = trim((string) ($row->orderid ?? ''));
-            $row->order_show_url = ($oid !== '' && strpos($oid, ',') === false)
-                ? url('/order-delivery/' . rawurlencode($oid))
-                : null;
-        }
+            $orderIds = $rows->pluck('orderid')->filter()->unique();
+            $linkedReturns = DB::table('sale_data')
+                ->whereIn('original_orderid', $orderIds)
+                ->where('product_id', $productId)
+                ->select('original_orderid', 'orderid', DB::raw('SUM(count) as total_returned'))
+                ->groupBy('original_orderid', 'orderid')
+                ->get()
+                ->groupBy('original_orderid');
 
-        return response()->json($rows);
+            foreach ($rows as $row) {
+                $oid = trim((string) ($row->orderid ?? ''));
+                $row->order_show_url = ($oid !== '' && strpos($oid, ',') === false)
+                    ? url('/order-delivery/' . rawurlencode($oid))
+                    : null;
+
+                $returns = $linkedReturns->get($row->orderid);
+                if ($returns && $returns->isNotEmpty()) {
+                    $retQty = abs((int) $returns->sum('total_returned'));
+                    $origQty = (int) $row->count;
+                    $row->gross_count = $origQty;
+                    $row->returned_count = $retQty;
+                    $row->net_count = $origQty - $retQty;
+                    $row->gross_line_total = (float) $row->line_total;
+                    $row->net_line_total = round(($origQty - $retQty) * (float) $row->price, 2);
+                    $row->has_returns = true;
+                    $row->return_orderids = $returns->pluck('orderid')->unique()->values()->all();
+                } else {
+                    $row->gross_count = (int) $row->count;
+                    $row->returned_count = 0;
+                    $row->net_count = (int) $row->count;
+                    $row->gross_line_total = (float) $row->line_total;
+                    $row->net_line_total = (float) $row->line_total;
+                    $row->has_returns = false;
+                    $row->return_orderids = [];
+                }
+                $row->is_linked_return = !empty($row->original_orderid);
+            }
+
+            return response()->json($rows);
         } catch (\Exception $e) {
             Log::error('Failed to load product sale details', [
                 'error' => $e->getMessage(),
@@ -1039,7 +1205,7 @@ class ReportController extends Controller
             $customerId = $request->input('customerId');
             $orderId = $request->input('orderid');
 
-            $salesDetails = DB::table('sale_data')
+            $items = DB::table('sale_data')
                 ->select(
                     'type',
                     'payment',
@@ -1048,13 +1214,81 @@ class ReportController extends Controller
                     'count',
                     'product_name',
                     'price',
+                    'original_orderid',
                     DB::raw('ROUND(count * price, 2) AS total_price')
                 )
                 ->where('customer_id', $customerId)
                 ->where('orderid', $orderId)
                 ->get();
 
-            return response()->json($salesDetails);
+            // Look up any returns linked to this order
+            $linkedReturns = DB::table('sale_data')
+                ->where('original_orderid', $orderId)
+                ->select(
+                    'product_id',
+                    'orderid',
+                    'date',
+                    DB::raw('SUM(count) as ret_count'),
+                    DB::raw('ROUND(SUM(count * price), 2) as ret_sales')
+                )
+                ->groupBy('product_id', 'orderid', 'date')
+                ->get()
+                ->groupBy('product_id');
+
+            foreach ($items as $item) {
+                $isLinkedReturn = !empty($item->original_orderid);
+                $prodReturns = $linkedReturns->get($item->product_id);
+
+                if ($isLinkedReturn) {
+                    $item->gross_count = 0;
+                    $item->returned_count = abs((int) $item->count);
+                    $item->gross_total_price = 0.00;
+                    $item->returned_total_price = abs((float) $item->total_price);
+                    $item->has_returns = false;
+                    $item->is_return = true;
+                    $item->return_receipts = [];
+                    $item->returns = [];
+                } elseif ($prodReturns && $prodReturns->isNotEmpty()) {
+                    $retQty = abs((int) $prodReturns->sum('ret_count'));
+                    $retSales = abs((float) $prodReturns->sum('ret_sales'));
+                    $origCount = (int) $item->count;
+                    $netCount = $origCount - $retQty;
+                    $grossTotal = (float) $item->total_price;
+                    $netTotal = round($netCount * (float) $item->price, 2);
+
+                    $item->gross_count = $origCount;
+                    $item->returned_count = $retQty;
+                    $item->count = $netCount;
+                    $item->gross_total_price = $grossTotal;
+                    $item->returned_total_price = $retSales;
+                    $item->total_price = $netTotal;
+                    $item->has_returns = true;
+                    $item->is_return = false;
+                    $item->return_receipts = $prodReturns->map(fn($r) => [
+                        'orderid' => $r->orderid,
+                        'date' => $r->date,
+                        'count' => abs($r->ret_count),
+                        'sales' => abs($r->ret_sales),
+                    ])->values()->all();
+                    $item->returns = $prodReturns->map(fn($r) => [
+                        'return_orderid' => $r->orderid,
+                        'date' => $r->date,
+                        'count' => abs($r->ret_count),
+                        'sales' => abs($r->ret_sales),
+                    ])->values()->all();
+                } else {
+                    $item->gross_count = (int) $item->count;
+                    $item->returned_count = 0;
+                    $item->gross_total_price = (float) $item->total_price;
+                    $item->returned_total_price = 0.00;
+                    $item->has_returns = false;
+                    $item->is_return = (int) $item->count < 0;
+                    $item->return_receipts = [];
+                    $item->returns = [];
+                }
+            }
+
+            return response()->json($items);
         } catch (\Exception $e) {
             Log::error('Failed to load customer order items', [
                 'error' => $e->getMessage(),
@@ -1065,9 +1299,6 @@ class ReportController extends Controller
         }
     }
 
-    /**
-     * Display ICT products with pagination and search
-     */
     public function ict(Request $request)
     {
         $search = $request->input('search', '');
@@ -1092,26 +1323,16 @@ class ReportController extends Controller
         return view('reports.ict', compact('ictData', 'search'));
     }
 
-    /**
-     * Search ICT products
-     */
     public function search(Request $request)
     {
-        return $this->ict($request); // Reuse the ict method for consistency
+        return $this->ict($request);
     }
 
-    /**
-     * Update quantity for ICT product
-     */
-    /**
-     * Update quantity for ICT product
-     */
     public function updateQuantity(Request $request)
     {
         Log::info('=== ICT QUANTITY UPDATE START ===');
 
         try {
-            // Check if we're receiving the request
             if (!$request->has('id') || !$request->has('quantity')) {
                 Log::error('Missing required fields', ['request' => $request->all()]);
                 return response()->json([
@@ -1122,12 +1343,10 @@ class ReportController extends Controller
 
             $id = $request->input('id');
             $quantity = $request->input('quantity');
-
             $eanCodeBase = $request->input('ean_code_base');
 
             Log::info('Processing update:', ['id' => $id, 'ean_code_base' => $eanCodeBase, 'quantity' => $quantity]);
 
-            // Basic validation
             if (!is_numeric($quantity) || $quantity < 0) {
                 Log::error('Invalid quantity', ['quantity' => $quantity]);
                 return response()->json([
@@ -1144,7 +1363,6 @@ class ReportController extends Controller
                 ], 422);
             }
 
-            // Update the database by EAN Code Base
             $affected = DB::table('ict')
                 ->where('ean_code_base', $eanCodeBase)
                 ->update([
@@ -1169,7 +1387,6 @@ class ReportController extends Controller
                     ]
                 ]);
             } else {
-                // Check if records exist with this EAN
                 $exists = DB::table('ict')->where('ean_code_base', $eanCodeBase)->exists();
 
                 if (!$exists) {
@@ -1185,7 +1402,7 @@ class ReportController extends Controller
                 ]);
 
                 return response()->json([
-                    'success' => true, // Still success if no change needed
+                    'success' => true,
                     'message' => 'Quantity already set to this value',
                     'data' => [
                         'ean_code_base' => $eanCodeBase,
@@ -1211,38 +1428,28 @@ class ReportController extends Controller
         }
     }
 
-    /**
-     * Display KS page with all customers and search functionality.
-     * This method fetches unique customers and displays them in a table.
-     * Users can search for customers and toggle KS status with buttons.
-     */
     public function ksPage(Request $request)
     {
         try {
-            $search = $request->input('search', ''); // Get search term if provided
+            $search = $request->input('search', '');
 
-            // Query to get all unique customers with their KS_exists status
-            // Include updated_at so we can order by the most recently updated customers first
             $query = DB::table('customers')
                 ->select('customer_id', 'customer_name', 'KS_exists', 'updated_at')
                 ->distinct();
 
-            // Apply search filter if search term is provided
             if ($search) {
                 $query->where('customer_name', 'LIKE', "%{$search}%");
             }
 
-            // Order by latest updated customer first, then fallback to customer_name
             $customers = $query->orderBy('updated_at', 'DESC')->orderBy('customer_name', 'ASC')->get();
 
-            // Return the view with customers data
             return view('customers.ks_customers', compact('customers', 'search'));
         } catch (\Exception $e) {
-            // Log the error for debugging
             Log::error('Error in ksPage: ' . $e->getMessage());
             return response()->json(['error' => 'Failed to load KS page: ' . $e->getMessage()], 500);
         }
     }
+
     public function customerProductsByDate(Request $request)
     {
         try {
@@ -1255,6 +1462,8 @@ class ReportController extends Controller
                     'product_id',
                     'product_name',
                     DB::raw('SUM(count) as count'),
+                    DB::raw('SUM(CASE WHEN count > 0 THEN count ELSE 0 END) as gross_count'),
+                    DB::raw('SUM(CASE WHEN count < 0 THEN ABS(count) ELSE 0 END) as returned_count'),
                     'price',
                     DB::raw('ROUND(SUM(count * price), 2) AS total_price')
                 )

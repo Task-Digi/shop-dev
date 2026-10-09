@@ -22,6 +22,7 @@ class SaleData extends Model
         'crm_link',
         'crm_id',
         'orderid',
+        'original_orderid',
         'product_id',
         'product_name',
         'price',
@@ -31,5 +32,9 @@ class SaleData extends Model
 
         // Add other fields as needed
     ];
-}
 
+    public function isReturn(): bool
+    {
+        return (int) $this->count < 0 || !empty($this->original_orderid);
+    }
+}

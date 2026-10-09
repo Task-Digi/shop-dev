@@ -31,16 +31,34 @@ class SaleItemService
                 ->get()
                 ->keyBy('product_id');
 
+            $originalOrderId = !empty($data['original_orderid']) ? trim((string) $data['original_orderid']) : null;
+            $isReturnEntry = !empty($data['is_return']) || $originalOrderId !== null;
+
+            // When linked to an original order, look up the original sale rows to snapshot original unit price & retail
+            $origSaleItems = $originalOrderId
+                ? SaleData::where('orderid', $originalOrderId)->get()->keyBy('product_id')
+                : collect();
+
             foreach ($data['productid'] as $key => $productId) {
                 $product = $products->get($productId);
-                $salesList = SalesList::create($this->salesListPayload($data, $productId, $data['count'][$key]));
+                $rawCount = (int) $data['count'][$key];
+
+                // If marked as return or linked to an original sale, ensure count is negative
+                $count = ($isReturnEntry && $rawCount > 0) ? -$rawCount : $rawCount;
+
+                $origItem = $origSaleItems->get($productId);
+
+                $salesList = SalesList::create($this->salesListPayload($data, $productId, $count, $originalOrderId));
 
                 SaleData::create($this->saleDataPayload(
                     $data,
                     $customer,
                     $product,
-                    $data['count'][$key],
+                    $count,
                     $salesList->id,
+                    $originalOrderId,
+                    $origItem?->price,
+                    $origItem?->retail
                 ));
             }
         });
@@ -62,8 +80,26 @@ class SaleItemService
             $customer = Customer::where('customer_id', $data['customerid'])->firstOrFail();
             $product = Product::where('product_id', $data['productid'])->firstOrFail();
 
-            $saleItem->update($this->salesListPayload($data, $data['productid'], $data['count']));
-            $saleData->update($this->saleDataPayload($data, $customer, $product, $data['count'], $saleItem->id));
+            $originalOrderId = !empty($data['original_orderid']) ? trim((string) $data['original_orderid']) : null;
+            $rawCount = (int) $data['count'];
+            $isReturn = !empty($data['is_return']) || $originalOrderId !== null;
+            $count = ($isReturn && $rawCount > 0) ? -$rawCount : $rawCount;
+
+            $origItem = $originalOrderId
+                ? SaleData::where('orderid', $originalOrderId)->where('product_id', $data['productid'])->first()
+                : null;
+
+            $saleItem->update($this->salesListPayload($data, $data['productid'], $count, $originalOrderId));
+            $saleData->update($this->saleDataPayload(
+                $data,
+                $customer,
+                $product,
+                $count,
+                $saleItem->id,
+                $originalOrderId,
+                $origItem?->price,
+                $origItem?->retail
+            ));
         });
     }
 
@@ -81,7 +117,7 @@ class SaleItemService
         });
     }
 
-    private function salesListPayload(array $data, string $productId, int $count): array
+    private function salesListPayload(array $data, string $productId, int $count, ?string $originalOrderId = null): array
     {
         return [
             'date' => $data['date'],
@@ -90,13 +126,25 @@ class SaleItemService
             'payment' => $data['payment'],
             'customerid' => $data['customerid'],
             'orderid' => $data['orderid'],
+            'original_orderid' => $originalOrderId,
             'productid' => $productId,
             'count' => $count,
         ];
     }
 
-    private function saleDataPayload(array $data, Customer $customer, Product $product, int $count, int $salesListId): array
-    {
+    private function saleDataPayload(
+        array $data,
+        Customer $customer,
+        Product $product,
+        int $count,
+        int $salesListId,
+        ?string $originalOrderId = null,
+        ?float $overridePrice = null,
+        ?float $overrideRetail = null
+    ): array {
+        $price = $overridePrice !== null ? round((float) $overridePrice, 4) : $this->snapshotUnitPrice($product);
+        $retail = $overrideRetail !== null ? (float) $overrideRetail : (float) $product->retail;
+
         return [
             'date' => $data['date'],
             'location' => $data['location'],
@@ -108,10 +156,11 @@ class SaleItemService
             'crm_link' => $customer->crm_link,
             'crm_id' => $customer->crm_id,
             'orderid' => $data['orderid'],
+            'original_orderid' => $originalOrderId,
             'product_id' => $product->product_id,
             'product_name' => $product->product_name,
-            'price' => $this->snapshotUnitPrice($product),
-            'retail' => $product->retail,
+            'price' => $price,
+            'retail' => $retail,
             'count' => $count,
             'sales_list_id' => $salesListId,
         ];

@@ -18,9 +18,14 @@ class SalesList extends Model
         'payment',
         'customerid',
         'orderid',
+        'original_orderid',
         'productid',
         'count',
         // Add other fields as needed
     ];
-}
 
+    public function customers()
+    {
+        return $this->hasMany(Customer::class, 'customer_id', 'customerid');
+    }
+}

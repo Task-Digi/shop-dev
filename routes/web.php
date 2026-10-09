@@ -61,6 +61,7 @@ Route::get('/download-csv', 'App\Http\Controllers\CsvController@downloadCsv')->n
 // Data Validation Routes
 Route::get('/get-customer-details', [CustomerController::class, 'getCustomerDetails'])->name('get_customer_details');
 Route::get('/validate-order-id', [SaleItemController::class, 'validateOrderId'])->name('validate_order_id');
+Route::get('/get-order-details', [SaleItemController::class, 'getOrderDetails'])->name('get_order_details');
 Route::post('/validate-product-id', [ProductController::class, 'checkProduct'])->name('validate_product_id');
 Route::get('/get-product-details', [ProductController::class, 'getProductDetails'])->name('get-product-details');
 Route::get('/check-product', [ProductController::class, 'check-product'])->name('check-product');

@@ -23,8 +23,6 @@ class SaleItemController extends Controller
 
     public function index()
     {
-        // Fetch all sale items from the database
-
         return view('sale-items.index');
     }
 
@@ -32,11 +30,9 @@ class SaleItemController extends Controller
     {
         return view('sale-items.create');
     }
+
     public function view()
     {
-        // The table is rendered client-side via DataTables server-side processing,
-        // so we no longer pre-load any rows here. We only pass the initial
-        // free-text search (used by the autocomplete) and the page chrome.
         $search = null;
         $initialDate = request('date');
         $initialSearch = request('search');
@@ -44,30 +40,28 @@ class SaleItemController extends Controller
         return view('sale-items.view', compact('search', 'initialDate', 'initialSearch'));
     }
 
-
     public function getSaleItems(Request $request)
     {
-        // Get the current page number
         $page = $request->input('page');
-        // Determine how many items to skip based on the page number and page length
         $offset = ($page - 1) * $request->input('length');
-        // Fetch data for the current page
         $saleItems = SalesList::orderBy('date', 'desc')
             ->skip($offset)
             ->take($request->input('length'))
             ->get();
 
-        // Return the data as JSON
         return response()->json($saleItems);
     }
-
 
     public function store(StoreSaleItemRequest $request)
     {
         try {
             $this->saleItemService->create($request->validated());
 
-            return back()->with('success', 'Sale items created successfully!');
+            $message = !empty($request->input('original_orderid')) || !empty($request->input('is_return'))
+                ? 'Return items recorded and linked successfully!'
+                : 'Sale items created successfully!';
+
+            return back()->with('success', $message);
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Exception $e) {
@@ -115,24 +109,14 @@ class SaleItemController extends Controller
         }
     }
 
-
-
     public function getLastSubmissionDate()
     {
-        // Retrieve the last submission date
         $lastSubmission = SaleData::orderBy('created_at', 'desc')->first();
+        $lastSubmissionDate = $lastSubmission ? $lastSubmission->date : date('Y-m-d');
 
-        if ($lastSubmission) {
-            // If a submission exists, get its creation date
-            $lastSubmissionDate = $lastSubmission->date;
-        } else {
-            // If no submissions exist, default to today's date
-            $lastSubmissionDate = date('Y-m-d');
-        }
-
-        // Return the last submission date as JSON
         return response()->json(['lastSubmissionDate' => $lastSubmissionDate]);
     }
+
     public function edit(int|string $id)
     {
         $saleItem = SaleData::query()->findOrFail($id);
@@ -176,9 +160,8 @@ class SaleItemController extends Controller
 
     public function validateOrderId(Request $request)
     {
-        $orderid = $request->input('orderid');
+        $orderid = trim((string) $request->input('orderid', ''));
 
-        // Check if the order ID already exists in the sale_list table
         $existingOrder = SalesList::query()->where('orderid', $orderid)->exists();
 
         if ($existingOrder) {
@@ -187,22 +170,84 @@ class SaleItemController extends Controller
 
         return response()->json(['success' => 'Order ID is valid']);
     }
+
+    public function getOrderDetails(Request $request)
+    {
+        $orderId = trim((string) $request->input('orderid', ''));
+        if ($orderId === '') {
+            return response()->json(['success' => false, 'message' => 'Please provide an Order ID.'], 400);
+        }
+
+        $items = SaleData::query()->where('orderid', $orderId)->get();
+        if ($items->isEmpty()) {
+            return response()->json(['success' => false, 'message' => "Order #{$orderId} not found in sales records."], 404);
+        }
+
+        $positiveSold = (int) $items->where('count', '>', 0)->sum('count');
+        if ($positiveSold <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => "Order #{$orderId} is a return entry. Returns cannot be linked to another return.",
+            ], 422);
+        }
+
+        $first = $items->first();
+
+        // Retrieve existing returns linked to this order
+        $linkedReturns = SaleData::query()
+            ->where('original_orderid', $orderId)
+            ->get()
+            ->groupBy('product_id');
+
+        $products = $items->where('count', '>', 0)->map(function ($item) use ($linkedReturns) {
+            $alreadyReturned = abs((int) ($linkedReturns->get($item->product_id)?->sum('count') ?? 0));
+            $origCount = (int) $item->count;
+            $available = max(0, $origCount - $alreadyReturned);
+
+            return [
+                'product_id' => (string) $item->product_id,
+                'product_name' => (string) $item->product_name,
+                'price' => (float) $item->price,
+                'retail' => (float) $item->retail,
+                'original_count' => $origCount,
+                'already_returned_count' => $alreadyReturned,
+                'available_return_count' => $available,
+            ];
+        })->values();
+
+        $order = [
+            'orderid' => (string) $first->orderid,
+            'date' => (string) $first->date,
+            'location' => (string) $first->location,
+            'type' => (string) $first->type,
+            'payment' => (string) $first->payment,
+            'customer_id' => (string) $first->customer_id,
+            'customer_name' => (string) $first->customer_name,
+            'products' => $products,
+        ];
+
+        return response()->json([
+            'success' => true,
+            'order' => $order,
+            ...$order,
+        ]);
+    }
+
     public function validateProductId(Request $request)
     {
         $productid = $request->input('productid');
 
-        // Check if the order ID already exists in the sale_list table
         $existingOrder = SalesList::query()->where('productid', $productid)->exists();
 
         if ($existingOrder) {
-            return response()->json(['error' => 'productid  already exists']);
+            return response()->json(['error' => 'productid already exists']);
         }
 
         return response()->json(['success' => 'productid is valid']);
     }
+
     public function getSalesByDate(Request $request)
     {
-
         $selectedDate = $request->selected_date;
         $sales = SalesList::query()->where('date', $selectedDate)->get();
         return response()->json($sales);
@@ -210,9 +255,6 @@ class SaleItemController extends Controller
 
     public function datasearch(Request $request)
     {
-        // Page render — the table itself fetches data via dataTable() AJAX.
-        // We only keep the URL query params around so the autocomplete /
-        // initial filter chips can use them.
         $search = trim((string) $request->input('search', ''));
         $initialDate = $request->input('date');
         $initialSearch = $search !== '' ? $search : null;
@@ -220,31 +262,19 @@ class SaleItemController extends Controller
         return view('sale-items.view', compact('search', 'initialDate', 'initialSearch'));
     }
 
-
     public function listall()
     {
-        // Same as view() — server-side DataTables handles the data fetch.
         $search = null;
         $initialDate = null;
         $initialSearch = null;
         return view('sale-items.view', compact('search', 'initialDate', 'initialSearch'));
     }
 
-    /**
-     * Server-side processing endpoint for the Sale Item dashboard DataTable.
-     *
-     * Accepts the standard DataTables request parameters plus a few extras
-     * used by the column-header filters (date_filter, location_filter,
-     * type_filter, payment_filter) and the top free-text search.
-     *
-     * Returns: { draw, recordsTotal, recordsFiltered, data: [...] }
-     */
     public function dataTable(Request $request)
     {
         $draw   = (int) $request->input('draw', 1);
         $start  = max(0, (int) $request->input('start', 0));
         $length = (int) $request->input('length', 25);
-        // length = -1 means "All". Cap it so we never blow the page up.
         if ($length <= 0 || $length > 5000) {
             $length = 5000;
         }
@@ -283,7 +313,7 @@ class SaleItemController extends Controller
             }
         }
 
-        // Top-bar free-text search (also catches DataTables' built-in search.value).
+        // Top-bar free-text search
         $globalSearch = trim((string) $request->input('search_global', ''));
         if ($globalSearch === '') {
             $globalSearch = trim((string) data_get($request->input('search'), 'value', ''));
@@ -328,7 +358,6 @@ class SaleItemController extends Controller
         $orderDir    = strtolower((string) data_get($request->input('order'), '0.dir', 'desc')) === 'asc' ? 'asc' : 'desc';
         $orderColumn = $columns[$orderColIdx] ?? 'date';
 
-        // Stable secondary order by id so pagination is deterministic.
         $rows = $query->orderBy($orderColumn, $orderDir)
             ->orderBy('id', 'desc')
             ->skip($start)
@@ -342,22 +371,41 @@ class SaleItemController extends Controller
                 'customer_id',
                 'customer_name',
                 'orderid',
+                'original_orderid',
                 'product_id',
                 'count',
             ]);
 
-        $data = $rows->map(function ($row) {
+        // Find any returns linked to these orders
+        $orderIds = $rows->pluck('orderid')->filter()->unique();
+        $linkedReturns = DB::table('sale_data')
+            ->whereIn('original_orderid', $orderIds)
+            ->select('original_orderid', 'product_id', DB::raw('SUM(count) as total_returned'))
+            ->groupBy('original_orderid', 'product_id')
+            ->get()
+            ->keyBy(fn ($r) => $r->original_orderid . '_' . $r->product_id);
+
+        $data = $rows->map(function ($row) use ($linkedReturns) {
+            $key = $row->orderid . '_' . $row->product_id;
+            $returnedCount = abs((int) ($linkedReturns->get($key)?->total_returned ?? 0));
+            $origCount = (int) $row->count;
+            $netCount = $origCount > 0 ? ($origCount - $returnedCount) : $origCount;
+
             return [
-                'id'            => $row->id,
-                'date'          => $row->date ? \Carbon\Carbon::parse($row->date)->format('d/m/Y') : '',
-                'location'      => (string) $row->location,
-                'type'          => (string) $row->type,
-                'payment'       => (string) $row->payment,
-                'customer_id'   => (string) $row->customer_id,
-                'customer_name' => (string) $row->customer_name,
-                'orderid'       => (string) $row->orderid,
-                'product_id'    => (string) $row->product_id,
-                'count'         => (string) $row->count,
+                'id'               => $row->id,
+                'date'             => $row->date ? \Carbon\Carbon::parse($row->date)->format('d/m/Y') : '',
+                'location'         => (string) $row->location,
+                'type'             => (string) $row->type,
+                'payment'          => (string) $row->payment,
+                'customer_id'      => (string) $row->customer_id,
+                'customer_name'    => (string) $row->customer_name,
+                'orderid'          => (string) $row->orderid,
+                'original_orderid' => (string) ($row->original_orderid ?? ''),
+                'product_id'       => (string) $row->product_id,
+                'count'            => (string) $row->count,
+                'returned_count'   => $returnedCount,
+                'net_count'        => $netCount,
+                'is_return'        => $origCount < 0 || !empty($row->original_orderid),
             ];
         });
 
@@ -369,11 +417,6 @@ class SaleItemController extends Controller
         ]);
     }
 
-    /**
-     * Returns the distinct values for the low-cardinality column filters
-     * (Location, Type, Payment) so the dropdowns can be populated without
-     * loading the whole table client-side.
-     */
     public function filterOptions()
     {
         return response()->json([
@@ -403,8 +446,6 @@ class SaleItemController extends Controller
         $like = '%' . $query . '%';
         $suggestions = [];
 
-        // Each column is searched against sale_data so that suggestions
-        // always reflect data the user can actually find in the table.
         $fields = [
             ['column' => 'customer_name', 'label' => 'Customer',   'limit' => 8],
             ['column' => 'customer_id',   'label' => 'CustomerID', 'limit' => 6],
