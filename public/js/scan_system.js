@@ -531,10 +531,10 @@
 
         // OPTIMISTIC UPDATE: Calculate values immediately from DOM
         const ean = row.getAttribute('data-ean');
-        const unitsElem = row.querySelector('.qty-val-minimal') || 
+        const unitsElem = row.querySelector('#mobile-qty-input-' + scanId) ||
                          row.querySelector('.qty-input-' + scanId) ||
                          row.querySelector('.qty-input-minimal') ||
-                         row.querySelector('#mobile-qty-input-' + scanId) ||
+                         row.querySelector('.qty-val-minimal') ||
                          row.querySelector('.qty-val');
         
         const scannedElems = document.querySelectorAll('.row-scanned-val[data-ean="' + ean + '"]');
@@ -641,10 +641,10 @@
 
         // OPTIMISTIC UPDATE
         const ean = row.getAttribute('data-ean');
-        const unitsElem = row.querySelector('.qty-val-minimal') || 
+        const unitsElem = row.querySelector('#mobile-qty-input-' + scanId) ||
                          row.querySelector('.qty-input-' + scanId) ||
                          row.querySelector('.qty-input-minimal') ||
-                         row.querySelector('#mobile-qty-input-' + scanId) ||
+                         row.querySelector('.qty-val-minimal') ||
                          row.querySelector('.qty-val');
         
         const scannedElems = document.querySelectorAll('.row-scanned-val[data-ean="' + ean + '"]');
@@ -1805,15 +1805,16 @@
 
     // --- Init ---
     document.addEventListener('DOMContentLoaded', () => {
-        // Keep keyboard closed for +/- buttons; capture phase so the input does not receive focus on tablets.
+        // Keep the keyboard closed when an action button is touched. Do not cancel
+        // touchstart: on mobile browsers that also cancels the synthetic click and
+        // makes +, -, and #OK appear unresponsive.
         ['mousedown', 'touchstart'].forEach(evtName => {
             document.addEventListener(evtName, (event) => {
                 if (!isMobileTouchDevice()) return;
                 const adjustButton = event.target.closest('.qty-btn, .qty-btn-minimal');
                 if (!adjustButton) return;
                 hideSoftKeyboard();
-                event.preventDefault();
-            }, { passive: false, capture: true });
+            }, { passive: true, capture: true });
         });
 
         // Quantity fields: on touch devices keep readonly until the user focuses the field explicitly (then keyboard is OK).
