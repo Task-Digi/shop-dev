@@ -44,6 +44,8 @@
         @endif
         @auth
             <form method="POST" action="{{ route('logout') }}" class="d-inline">@csrf<button type="submit" class="btn btn-outline-danger">Logout</button></form>
+        @else
+            <a href="{{ route('login') }}" class="btn {{ request()->routeIs('login') ? 'btn-secondary' : 'btn-success' }}">Login</a>
         @endauth
     </div>
 </div>
@@ -67,5 +69,7 @@
     @endif
     @auth
         <form method="POST" action="{{ route('logout') }}">@csrf<button type="submit" class="btn btn-outline-danger">Logout</button></form>
+    @else
+        <a href="{{ route('login') }}" class="btn {{ request()->routeIs('login') ? 'btn-secondary' : 'btn-outline-success' }}">Login</a>
     @endauth
 </div>
