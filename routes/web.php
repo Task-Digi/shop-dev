@@ -10,6 +10,7 @@ use App\Http\Controllers\AuthLoginController;
 use App\Http\Controllers\OrderDeliveryController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\TimesheetController;
+use App\Http\Controllers\UserAccessController;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,7 +26,10 @@ use App\Http\Controllers\TimesheetController;
 // Authentication Routes
 Route::redirect('/', '/Dashboard');
 Route::get('/login', [AuthLoginController::class, 'showLoginForm'])->name('login');
-Route::post('/login', [AuthLoginController::class, 'login']);
+Route::post('/login', [AuthLoginController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/logout', [AuthLoginController::class, 'logout'])->middleware('auth')->name('logout');
+Route::get('/login/secureivs', [AuthLoginController::class, 'redirectToSecureIvs'])->name('login.secureivs');
+Route::get('/login/secureivs/callback', [AuthLoginController::class, 'handleSecureIvsCallback'])->name('login.secureivs.callback');
 
 // Payroll / Timesheet Routes
 Route::get('/timesheet', [TimesheetController::class, 'index'])->name('timesheet.index');
@@ -102,7 +106,7 @@ Route::post('/update-crm-id', [ReportController::class, 'updateCrmId']);
 Route::post('/get-latest-crm-id', [ReportController::class, 'getLatestCrmId']);
 
 // Order Delivery Routes
-Route::prefix('order-delivery')->group(function () {
+Route::prefix('order-delivery')->middleware(['auth', 'service:orders'])->group(function () {
     Route::get('/', [OrderDeliveryController::class, 'index'])->name('order-delivery.index');
     Route::get('/mobile-global', [OrderDeliveryController::class, 'mobileGlobal'])->name('order-delivery.mobile-global');
     Route::get('/global-latest-scan', [OrderDeliveryController::class, 'globalLatestScan'])->name('order-delivery.global-latest-scan');
@@ -123,6 +127,12 @@ Route::prefix('order-delivery')->group(function () {
     Route::get('/{orderId}/latest-scan', [OrderDeliveryController::class, 'latestScanState'])->name('order-delivery.latest-scan');
     Route::get('/{orderId}', [OrderDeliveryController::class, 'show'])->name('order-delivery.show');
     Route::delete('/{orderId}', [OrderDeliveryController::class, 'deleteOrder'])->name('order-delivery.delete');
+});
+
+Route::prefix('admin/users')->middleware(['auth', 'admin'])->name('admin.users.')->group(function () {
+    Route::get('/', [UserAccessController::class, 'index'])->name('index');
+    Route::post('/', [UserAccessController::class, 'store'])->name('store');
+    Route::put('/{user}', [UserAccessController::class, 'update'])->name('update');
 });
 
 Route::get('/home', [HomeController::class, 'index'])->name('home');

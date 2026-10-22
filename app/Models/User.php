@@ -27,6 +27,8 @@ class User extends Authenticatable
     'name',
     'email',
     'password',
+    'is_admin',
+    'is_active',
   ];
 
 
@@ -47,7 +49,24 @@ class User extends Authenticatable
    */
   protected $casts = [
     'email_verified_at' => 'datetime',
+    'password' => 'hashed',
+    'is_admin' => 'boolean',
+    'is_active' => 'boolean',
   ];
+
+  public function services()
+  {
+    return $this->belongsToMany(Service::class)->withTimestamps();
+  }
+
+  public function canAccessService(string $service): bool
+  {
+    if (!$this->is_active) {
+      return false;
+    }
+
+    return $this->is_admin || $this->services()->where('slug', $service)->exists();
+  }
 
   public function authorizeRoles($roles)
 

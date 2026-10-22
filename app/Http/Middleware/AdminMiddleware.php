@@ -3,7 +3,6 @@
 namespace App\Http\Middleware;
 
 use Closure;
-use Auth;
 
 class AdminMiddleware
 {
@@ -16,11 +15,12 @@ class AdminMiddleware
      */
     public function handle($request, Closure $next)
     {
-       if(auth::check() && Auth::user()->role_id == 1){
-   return $next($request);
-}
-else {
-   return redirect()->route('login');
-}
+        if (!$request->user()) {
+            return redirect()->route('login');
+        }
+
+        abort_unless($request->user()->is_active && $request->user()->is_admin, 403);
+
+        return $next($request);
     }
 }
