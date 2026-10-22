@@ -33,9 +33,7 @@
         <a href="/report/all" class="btn {{ request()->is('report/all') ? 'btn-secondary' : 'btn-primary' }}">Customers</a>
         <a href="/report/all/product" class="btn {{ request()->is('report/all/product') ? 'btn-secondary' : 'btn-primary' }}">Products</a>
         <a href="{{ route('ict') }}" class="btn {{ request()->routeIs('ict') ? 'btn-secondary' : 'btn-primary' }}">Farrow & Ball</a>
-        @if(auth()->user()?->canAccessService('orders'))
-            <a href="{{ route('order-delivery.index') }}" class="btn {{ request()->routeIs('order-delivery.*') ? 'btn-secondary' : 'btn-primary' }}">Orders</a>
-        @endif
+        <a href="{{ route('order-delivery.index') }}" class="btn {{ request()->routeIs('order-delivery.*') ? 'btn-secondary' : 'btn-primary' }}">Order Delivery</a>
         @if(\Illuminate\Support\Facades\Route::has('timesheet.index'))
             <a href="{{ route('timesheet.index') }}" class="btn {{ request()->routeIs('timesheet.index') ? 'btn-secondary' : 'btn-primary' }}">Payroll</a>
         @endif
@@ -44,8 +42,6 @@
         @endif
         @auth
             <form method="POST" action="{{ route('logout') }}" class="d-inline">@csrf<button type="submit" class="btn btn-outline-danger">Logout</button></form>
-        @else
-            <a href="{{ route('login') }}" class="btn {{ request()->routeIs('login') ? 'btn-secondary' : 'btn-success' }}">Login</a>
         @endauth
     </div>
 </div>
@@ -58,9 +54,7 @@
     <a href="/report/all" class="btn {{ request()->is('report/all') ? 'btn-secondary' : 'btn-outline-primary' }}">Customers</a>
     <a href="/report/all/product" class="btn {{ request()->is('report/all/product') ? 'btn-secondary' : 'btn-outline-primary' }}">Products</a>
     <a href="{{ route('ict') }}" class="btn {{ request()->routeIs('ict') ? 'btn-secondary' : 'btn-outline-primary' }}">Farrow & Ball</a>
-    @if(auth()->user()?->canAccessService('orders'))
-        <a href="{{ route('order-delivery.index') }}" class="btn {{ request()->routeIs('order-delivery.*') ? 'btn-secondary' : 'btn-outline-primary' }}">Orders</a>
-    @endif
+    <a href="{{ route('order-delivery.index') }}" class="btn {{ request()->routeIs('order-delivery.*') ? 'btn-secondary' : 'btn-outline-primary' }}">Order Delivery</a>
     @if(\Illuminate\Support\Facades\Route::has('timesheet.index'))
         <a href="{{ route('timesheet.index') }}" class="btn {{ request()->routeIs('timesheet.index') ? 'btn-secondary' : 'btn-outline-primary' }}">Payroll</a>
     @endif
@@ -69,7 +63,5 @@
     @endif
     @auth
         <form method="POST" action="{{ route('logout') }}">@csrf<button type="submit" class="btn btn-outline-danger">Logout</button></form>
-    @else
-        <a href="{{ route('login') }}" class="btn {{ request()->routeIs('login') ? 'btn-secondary' : 'btn-outline-success' }}">Login</a>
     @endauth
 </div>
