@@ -36,7 +36,7 @@ return [
         'api_key' => env('SECUREIVS_API_KEY', 'GFUEGLzTzF6UHByZ1'),
         'auth_url' => env('SECUREIVS_AUTH_URL', 'https://customer-api.secureivs.eu'),
         'api_url' => env('SECUREIVS_API_URL', 'https://api.secureivs.eu/api/v2'),
-        'redirect_uri' => env('SECUREIVS_REDIRECT_URI', 'https://shop.digifront.biz/login/secureivs/callback'),
+        'redirect_uri' => env('SECUREIVS_REDIRECT_URI', 'https://shop.fabconcept.no/login/secureivs/callback'),
     ],
 
 ];
