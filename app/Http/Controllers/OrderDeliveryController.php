@@ -284,10 +284,10 @@ class OrderDeliveryController extends Controller
                 // Broadcast event to trigger index page auto-refresh for active observers
                 broadcast(new ScanBroadcast('global', [
                     'action' => 'reload_list',
-                    'timestamp' => \Carbon\Carbon::now()->toDateTimeString()
+                    'timestamp' => Carbon::now()->toDateTimeString()
                 ]));
             } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error("Pusher Broadcast Error during Import: " . $e->getMessage());
+                Log::error("Pusher Broadcast Error during Import: " . $e->getMessage());
             }
 
             return back()->with('success', 'Order imported and product prices synchronized successfully');
@@ -298,14 +298,14 @@ class OrderDeliveryController extends Controller
         }
     }
 
-    private function parseNumber($value)
+    private function parseNumber(mixed $value)
     {
         if (is_numeric($value)) return $value;
         $clean = str_replace([' ', ','], ['', '.'], $value);
         return is_numeric($clean) ? (float)$clean : 0;
     }
 
-    public function show($orderId)
+    public function show(string $orderId)
     {
         $order = OrderRecord::where('order_id', $orderId)->firstOrFail();
         $items = OrderItem::where('order_id', $orderId)->get();
@@ -776,7 +776,7 @@ class OrderDeliveryController extends Controller
     /**
      * Helper to get high-fidelity state for any product in an order.
      */
-    private function getProductState($orderId, $ean)
+    private function getProductState(string $orderId, string $ean)
     {
         $ean = trim((string)$ean);
         // FIX: Prioritize EAN lookup, then Product ID
@@ -957,7 +957,7 @@ class OrderDeliveryController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Session information updated',
-            'planned_delivery_formatted' => $order->planned_delivery && $order->planned_delivery != '0001-01-01' ? \Carbon\Carbon::parse($order->planned_delivery)->format('d.m.Y') : '-'
+            'planned_delivery_formatted' => $order->planned_delivery && $order->planned_delivery != '0001-01-01' ? Carbon::parse($order->planned_delivery)->format('d.m.Y') : '-'
         ]);
     }
 
@@ -1066,7 +1066,7 @@ class OrderDeliveryController extends Controller
         ]);
     }
 
-    private function getDeviations($orderId)
+    private function getDeviations(string $orderId)
     {
         $items = OrderItem::where('order_id', $orderId)->get();
         $allScans = OrderScan::where('order_id', $orderId)
@@ -1254,7 +1254,7 @@ class OrderDeliveryController extends Controller
         return array_values(array_unique($ids));
     }
 
-    public function sync($orderId)
+    public function sync(string $orderId)
     {
         // For mobile/PC real-time update check
         $latestScan = OrderScan::where('order_id', $orderId)
@@ -1298,7 +1298,7 @@ class OrderDeliveryController extends Controller
     /**
      * Return the latest scan state for an order as JSON (used by mobile for cross-device sync).
      */
-    public function latestScanState($orderId)
+    public function latestScanState(string $orderId)
     {
         $latestScan = OrderScan::where('order_id', $orderId)
             ->where('deactivated', false)
@@ -1329,7 +1329,7 @@ class OrderDeliveryController extends Controller
         ], $state));
     }
 
-    private function broadcastGlobalScanState($orderId, array $payload): void
+    private function broadcastGlobalScanState(string $orderId, array $payload): void
     {
         try {
             $order = OrderRecord::where('order_id', $orderId)->first();
@@ -1379,7 +1379,7 @@ class OrderDeliveryController extends Controller
         return view('order-delivery.mobile_global', compact('order', 'latestScan'));
     }
 
-    public function mobile($orderId)
+    public function mobile(string $orderId)
     {
         $order = OrderRecord::where('order_id', $orderId)->firstOrFail();
 
@@ -1404,7 +1404,7 @@ class OrderDeliveryController extends Controller
         return view('order-delivery.mobile_display', compact('order', 'latestScan'));
     }
 
-    public function deleteOrder($orderId)
+    public function deleteOrder(string $orderId)
     {
         try {
             DB::beginTransaction();
@@ -1426,7 +1426,7 @@ class OrderDeliveryController extends Controller
         }
     }
 
-    private function parseDate($dateString)
+    private function parseDate(string $dateString)
     {
         if (empty($dateString) || strtolower($dateString) == 'null' || $dateString == '00.00.0000') return null;
 

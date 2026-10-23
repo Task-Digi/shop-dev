@@ -62,8 +62,9 @@ class AuthLoginController extends Controller
         $token = (string) ($request->query('token') ?: $request->query('return_code'));
 
         if ($token === '') {
-            return redirect()->route('login')
-                ->withErrors(['email' => 'Missing verification token from Shop Secure IVS.']);
+            return response()->view('auth.login', [
+                'status' => 'Secure IVS callback is active and ready.'
+            ], 200);
         }
 
         try {

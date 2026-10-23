@@ -76,15 +76,16 @@ class SecureIvsLoginTest extends TestCase
         $this->assertStringContainsString('https://customer-api.secureivs.eu', $targetUrl);
         $this->assertStringContainsString('client_id=9b3tvZGZStRrcTsfTZifsjgkaUTER3aOKaXjshkO', $targetUrl);
         $this->assertStringContainsString('login_method=email', $targetUrl);
-        $this->assertStringContainsString(urlencode(route('login.secureivs.callback')), $targetUrl);
+        $expectedRedirect = config('services.secureivs.redirect_uri') ?: route('login.secureivs.callback');
+        $this->assertStringContainsString(urlencode($expectedRedirect), $targetUrl);
     }
 
-    public function test_callback_without_token_redirects_to_login_with_error(): void
+    public function test_callback_without_token_renders_callback_ready_view(): void
     {
         $response = $this->get(route('login.secureivs.callback'));
 
-        $response->assertRedirect(route('login'));
-        $response->assertSessionHasErrors('email');
+        $response->assertStatus(200);
+        $response->assertSee('Login with Shop Secure IVS');
     }
 
     public function test_callback_with_valid_token_logs_in_existing_user(): void
