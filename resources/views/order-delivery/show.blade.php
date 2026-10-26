@@ -1758,10 +1758,10 @@
                 currentLastScanId = @json($latestScanId);
 
                 async function reopenReport() {
-                    const { value: password } = await Swal.fire({
-                        title: 'Enter Password to Reopen',
-                        input: 'password',
-                        inputPlaceholder: 'Enter password',
+                    const confirmResult = await Swal.fire({
+                        title: 'Reopen Report?',
+                        text: 'Do you want to reopen this report and make it editable again?',
+                        icon: 'question',
                         showCancelButton: true,
                         confirmButtonText: 'REOPEN',
                         cancelButtonText: 'CANCEL',
@@ -1772,12 +1772,11 @@
                             popup: 'reopen-swal-popup',
                             title: 'reopen-swal-title',
                             confirmButton: 'reopen-confirm-btn',
-                            cancelButton: 'reopen-cancel-btn',
-                            input: 'reopen-password-input'
+                            cancelButton: 'reopen-cancel-btn'
                         }
                     });
 
-                    if (password) {
+                    if (confirmResult.isConfirmed) {
                         try {
                             const response = await fetch(window.ScanConfig.routes.reopen, {
                                 method: 'POST',
@@ -1786,8 +1785,7 @@
                                     'X-CSRF-TOKEN': window.ScanConfig.csrfToken
                                 },
                                 body: JSON.stringify({
-                                    order_id: window.ScanConfig.orderId,
-                                    password: password
+                                    order_id: window.ScanConfig.orderId
                                 })
                             });
 

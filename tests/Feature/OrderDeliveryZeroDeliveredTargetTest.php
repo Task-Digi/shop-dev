@@ -194,5 +194,19 @@ class OrderDeliveryZeroDeliveredTargetTest extends TestCase
             'order_id' => $orderId,
             'status' => 'Completed',
         ]);
+
+        // Reopen order without password
+        $reopenResponse = $this->actingAs($admin)->post('/order-delivery/reopen', [
+            'order_id' => $orderId,
+        ]);
+
+        $reopenResponse->assertOk()->assertJson([
+            'success' => true,
+            'status' => 'Started',
+        ]);
+        $this->assertDatabaseHas('order_records', [
+            'order_id' => $orderId,
+            'status' => 'Started',
+        ]);
     }
 }

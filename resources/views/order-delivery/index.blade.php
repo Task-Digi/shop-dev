@@ -549,17 +549,16 @@
 
         async function reopenReportList(orderId) {
             if (typeof Swal === 'undefined') {
-                const response = prompt("Enter Password to Reopen (3535):");
-                if (response === '3535') {
-                    submitReopen(orderId, response);
+                if (confirm("Are you sure you want to reopen this report?")) {
+                    submitReopen(orderId);
                 }
                 return;
             }
 
-            const { value: password } = await Swal.fire({
-                title: 'Enter Password to Reopen',
-                input: 'password',
-                inputPlaceholder: 'Enter password',
+            const confirmResult = await Swal.fire({
+                title: 'Reopen Report?',
+                text: 'Do you want to reopen this report and make it editable again?',
+                icon: 'question',
                 showCancelButton: true,
                 confirmButtonText: 'REOPEN',
                 cancelButtonText: 'CANCEL',
@@ -570,17 +569,16 @@
                     popup: 'reopen-swal-popup',
                     title: 'reopen-swal-title',
                     confirmButton: 'reopen-confirm-btn',
-                    cancelButton: 'reopen-cancel-btn',
-                    input: 'reopen-password-input'
+                    cancelButton: 'reopen-cancel-btn'
                 }
             });
 
-            if (password) {
-                submitReopen(orderId, password);
+            if (confirmResult.isConfirmed) {
+                submitReopen(orderId);
             }
         }
 
-        async function submitReopen(orderId, password) {
+        async function submitReopen(orderId) {
             try {
                 const response = await fetch("{{ route('order-delivery.reopen') }}", {
                     method: 'POST',
@@ -589,8 +587,7 @@
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                     },
                     body: JSON.stringify({
-                        order_id: orderId,
-                        password: password
+                        order_id: orderId
                     })
                 });
 

@@ -1465,15 +1465,8 @@ class OrderDeliveryController extends Controller
     {
         $request->validate([
             'order_id' => 'required|exists:order_records,order_id',
-            'password' => 'required'
+            'password' => 'nullable'
         ]);
-
-        if ($request->password !== '3535') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid password'
-            ], 403);
-        }
 
         $order = OrderRecord::where('order_id', $request->order_id)->first();
         $order->status = 'Started';
