@@ -382,9 +382,12 @@
             let _lastUpdatedAt = {{ $latestScan && $latestScan->updated_at ? $latestScan->updated_at->valueOf() : 0 }};
             let _lastScanned = {{ isset($latestScan->scanned_total) ? $latestScan->scanned_total : 'null' }};
             @php
+                $__mobOrderHasDelivered = isset($order->order_id)
+                    ? \App\Models\OrderItem::where('order_id', $order->order_id)->where('delivered', '>', 0)->exists()
+                    : (isset($latestScan->delivery_target_total) && $latestScan->delivery_target_total > 0);
                 $__mobDelivered = isset($latestScan->delivery_target_total) ? (int)$latestScan->delivery_target_total : 0;
                 $__mobOrdered = isset($latestScan->ordered_total) ? (int)$latestScan->ordered_total : 0;
-                $__mobTarget = $__mobDelivered > 0 ? $__mobDelivered : $__mobOrdered;
+                $__mobTarget = $__mobOrderHasDelivered ? $__mobDelivered : $__mobOrdered;
                 $__mobScanned = isset($latestScan->scanned_total) ? (int)$latestScan->scanned_total : 0;
             @endphp
             let _lastRemaining = {{ isset($latestScan->ordered_total, $latestScan->scanned_total) ? max(0, $__mobTarget - $__mobScanned) : 'null' }};
@@ -405,7 +408,7 @@
                             <div class="item-meta-minimal mt-1">Varenr : ${d.product_id || '—'}&nbsp;&nbsp;EAN : ${d.ean_code || '—'}</div>
                         </div>
                             <div class="metrics-grid mb-3">
-                                <div class="metric-box"><span class="metric-label">Ordered</span><span class="metric-val row-ordered-val" data-ean="${d.ean_code}">${d.ordered}</span></div>
+                                <div class="metric-box"><span class="metric-label">Delivered</span><span class="metric-val row-ordered-val" data-ean="${d.ean_code}">${d.delivery_target !== undefined ? d.delivery_target : d.ordered}${(d.ordered !== undefined && d.delivery_target !== undefined && d.ordered != d.delivery_target) ? ` <small class="text-muted" style="font-size:0.7em;">(Ord: ${d.ordered})</small>` : ''}</span></div>
                                 <div class="metric-box"><span class="metric-label">Scanned</span><span class="metric-val row-scanned-val" data-ean="${d.ean_code}">${d.scanned}</span></div>
                                 <div class="metric-box"><span class="metric-label">Rest</span><span class="metric-val remaining row-remaining-val" data-ean="${d.ean_code}">${d.remaining}</span></div>
                                 <div class="metric-box"><span class="metric-label">#</span><span class="metric-val units-val" id="mq-${d.scan_id}">${d.units}</span></div>

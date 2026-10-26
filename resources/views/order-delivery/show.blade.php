@@ -1454,6 +1454,7 @@
                         $hubLatestScan = $recentScans->first(function ($s) {
                             return empty($s->is_virtual) && (int)($s->id ?? 0) > 0;
                         });
+                        $orderHasDelivered = $orderHasDelivered ?? ($items->sum(function ($it) { return (int)($it->delivered ?? 0); }) > 0);
                     @endphp
 
                     <div id="mobileHistoryList" class="d-block d-sm-none">
@@ -1461,7 +1462,7 @@
                         @php
                         $ordered = (int)$scan->ordered_total;
                         $rawTarget = (int)($scan->delivery_target_total ?? 0);
-                        $target = $rawTarget > 0 ? $rawTarget : $ordered;
+                        $target = $orderHasDelivered ? $rawTarget : $ordered;
                         $scannedSoFar = $scan->scanned_total;
                         $diff = $scannedSoFar - $target;
                         $remaining = max(0, $target - $scannedSoFar);
@@ -1492,8 +1493,9 @@
                                 <div class="d-flex flex-wrap gap-2 align-items-center mt-1">
                                     <span class="status-badge-mobile" style="color: {{ $statusColor }}; background: {{ $statusColor }}15;">{{ $statusText }}</span>
                                     <span class="rest-label-mobile">REST: <span class="row-remaining-val" style="color: {{ $remaining > 0 ? '#2563eb' : '#64748b' }}">{{ $remaining }}</span></span>
+                                    <span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">Del: {{ $target }} @if($ordered != $target)(Ord: {{ $ordered }})@endif</span>
                                 </div>
-                                <span class="visually-hidden"><span class="row-ordered-val">{{ $ordered }}</span><span class="row-scanned-val">{{ $scannedSoFar }}</span></span>
+                                <span class="visually-hidden"><span class="row-ordered-val">{{ $target }}</span><span class="row-scanned-val">{{ $scannedSoFar }}</span></span>
                             </div>
 
                             <div class="d-flex align-items-center gap-2">
@@ -1531,7 +1533,7 @@
                                         $scan = $hubLatestScan;
                                         $ordered = (int)$scan->ordered_total;
                                         $rawTarget = (int)($scan->delivery_target_total ?? 0);
-                                        $target = $rawTarget > 0 ? $rawTarget : $ordered;
+                                        $target = $orderHasDelivered ? $rawTarget : $ordered;
                                         $scannedSoFar = $scan->scanned_total;
                                         $diff = $scannedSoFar - $target;
                                         $remaining = max(0, $target - $scannedSoFar);
@@ -1558,7 +1560,12 @@
                                             </div>
                                             @endif
                                         </td>
-                                        <td class="row-ordered-val col-ordered fw-600 text-secondary" data-ean="{{ $scan->ean_code }}">{{ $ordered }}</td>
+                                        <td class="row-ordered-val col-ordered fw-600 text-secondary" data-ean="{{ $scan->ean_code }}">
+                                            <span class="delivered-qty-val">{{ $target }}</span>
+                                            @if($ordered != $target)
+                                                <div class="text-muted" style="font-size: 0.72rem; font-weight: 500;" title="Ordered Quantity">(Ord: {{ $ordered }})</div>
+                                            @endif
+                                        </td>
                                         <td class="row-scanned-val col-scanned fw-700 text-dark" data-ean="{{ $scan->ean_code }}">{{ $scannedSoFar }}</td>
                                         <td class="row-remaining-val col-rest fw-700 {{ $remaining > 0 ? 'text-primary' : 'text-success' }}" data-ean="{{ $scan->ean_code }}">{{ $remaining }}</td>
                                         <td class="col-qty"><span class="badge bg-light text-secondary border-0 fw-700 p-1 units-val" style="font-size: 0.75rem;">{{ $scan->units }}</span></td>
@@ -1596,7 +1603,7 @@
                                 <tr>
                                     <th class="col-time">DATE</th>
                                     <th class="col-product">PRODUCT DETAILS</th>
-                                    <th class="col-ordered">ORDERED</th>
+                                    <th class="col-ordered" title="Delivered quantity (supplier delivery target)">DELIVERED</th>
                                     <th class="col-scanned">SCANNED</th>
                                     <th class="col-rest">REST</th>
                                     <th class="col-qty">#</th>
@@ -1612,7 +1619,7 @@
                                 @php
                                 $ordered = (int)$scan->ordered_total;
                                 $rawTarget = (int)($scan->delivery_target_total ?? 0);
-                                $target = $rawTarget > 0 ? $rawTarget : $ordered;
+                                $target = $orderHasDelivered ? $rawTarget : $ordered;
                                 $scannedSoFar = $scan->scanned_total;
                                 $diff = $scannedSoFar - $target;
                                 $remaining = max(0, $target - $scannedSoFar);
@@ -1667,7 +1674,12 @@
                                         </div>
                                         @endif
                                     </td>
-                                    <td class="row-ordered-val col-ordered fw-600 text-secondary" data-ean="{{ $scan->ean_code }}">{{ $ordered }}</td>
+                                    <td class="row-ordered-val col-ordered fw-600 text-secondary" data-ean="{{ $scan->ean_code }}">
+                                        <span class="delivered-qty-val">{{ $target }}</span>
+                                        @if($ordered != $target)
+                                            <div class="text-muted" style="font-size: 0.72rem; font-weight: 500;" title="Ordered Quantity">(Ord: {{ $ordered }})</div>
+                                        @endif
+                                    </td>
                                     <td class="row-scanned-val col-scanned fw-700 text-dark" data-ean="{{ $scan->ean_code }}">{{ $scannedSoFar }}</td>
                                     <td class="row-remaining-val col-rest fw-700 {{ $remaining > 0 ? 'text-primary' : 'text-success' }}" data-ean="{{ $scan->ean_code }}">{{ $remaining }}</td>
                                     <td class="col-qty">

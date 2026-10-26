@@ -1,7 +1,10 @@
 @php
 $ordered = (int)$scan->ordered_total;
 $rawTarget = (int)($scan->delivery_target_total ?? 0);
-$target = $rawTarget > 0 ? $rawTarget : $ordered;
+$orderHasDelivered = isset($scan->order_id)
+    ? \App\Models\OrderItem::where('order_id', $scan->order_id)->where('delivered', '>', 0)->exists()
+    : ($rawTarget > 0);
+$target = $orderHasDelivered ? $rawTarget : $ordered;
 $scannedSoFar = $scan->scanned_total;
 $diff = $scannedSoFar - $target;
 $remaining = max(0, $target - $scannedSoFar);
@@ -44,8 +47,13 @@ $eanMissing = !empty($scan->sku) && !empty($scan->ean_code) && strval($scan->ean
 
         <div class="metrics-grid mb-3">
             <div class="metric-box">
-                <span class="metric-label">Ordered</span>
-                <span class="metric-val row-ordered-val" data-ean="{{ $scan->ean_code }}">{{ $ordered }}</span>
+                <span class="metric-label">Delivered</span>
+                <span class="metric-val row-ordered-val" data-ean="{{ $scan->ean_code }}">
+                    <span class="delivered-qty-val">{{ $target }}</span>
+                    @if($ordered != $target)
+                        <div class="text-muted" style="font-size: 0.65rem; font-weight: 500;">(Ord: {{ $ordered }})</div>
+                    @endif
+                </span>
             </div>
             <div class="metric-box">
                 <span class="metric-label">Scanned</span>

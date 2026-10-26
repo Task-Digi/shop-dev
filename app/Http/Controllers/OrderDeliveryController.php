@@ -443,12 +443,15 @@ class OrderDeliveryController extends Controller
         $totalExpected = $items->sum(function ($it) {
             return (int)($it->delivered ?? 0);
         });
+        $orderHasDelivered = $items->contains(function ($it) {
+            return (int)($it->delivered ?? 0) > 0;
+        });
         $totalScanned = OrderScan::where('order_id', $orderId)->where('deactivated', false)->sum('units');
         $progressPercent = $totalExpected > 0 ? min(100, ($totalScanned / $totalExpected) * 100) : 0;
 
         $latestScanId = $recentScans->where('id', '>', 0)->first() ? $recentScans->where('id', '>', 0)->first()->id : null;
 
-        return view('order-delivery.show', compact('order', 'items', 'recentScans', 'totalExpected', 'totalScanned', 'progressPercent', 'latestScanId'));
+        return view('order-delivery.show', compact('order', 'items', 'recentScans', 'totalExpected', 'totalScanned', 'progressPercent', 'latestScanId', 'orderHasDelivered'));
     }
 
     public function scan(Request $request)
@@ -776,7 +779,7 @@ class OrderDeliveryController extends Controller
     /**
      * Helper to get high-fidelity state for any product in an order.
      */
-    private function getProductState(string $orderId, string $ean)
+    public function getProductState(string $orderId, string $ean)
     {
         $ean = trim((string)$ean);
         // FIX: Prioritize EAN lookup, then Product ID
@@ -827,9 +830,9 @@ class OrderDeliveryController extends Controller
         $firstItem = $orderItems->first();
         $productName = $product ? $product->product_name : ($firstItem ? $firstItem->item_name : "Unknown Item: $ean");
 
-        // Use delivered target when available; otherwise fallback to ordered quantity.
-        // This prevents false OVER when delivered is empty/0 but ordered exists.
-        $effectiveTarget = $totalDeliveryTarget > 0 ? $totalDeliveryTarget : $totalOrdered;
+        // Use delivered target when order has delivery information; otherwise fallback to ordered quantity.
+        $orderHasDelivered = OrderItem::where('order_id', $orderId)->where('delivered', '>', 0)->exists();
+        $effectiveTarget = $orderHasDelivered ? $totalDeliveryTarget : $totalOrdered;
         $remaining = max(0, $effectiveTarget - $totalScanned);
         $diff = $totalScanned - $effectiveTarget;
         $status = $diff == 0 ? 'COMPLETE' : ($diff > 0 ? 'OVER' : 'UNDER');
@@ -1117,10 +1120,16 @@ class OrderDeliveryController extends Controller
             $scannedMap[$key] = ($scannedMap[$key] ?? 0) + (int) $scan->units;
         }
 
-        $expectedForKey = static function (string $key) use ($deliveredMap, $orderedMap): int {
-            $d = (int) ($deliveredMap[$key] ?? 0);
+        $orderHasDelivered = $items->contains(function ($it) {
+            return (int)($it->delivered ?? 0) > 0;
+        });
 
-            return $d > 0 ? $d : (int) ($orderedMap[$key] ?? 0);
+        $expectedForKey = static function (string $key) use ($deliveredMap, $orderedMap, $orderHasDelivered): int {
+            if ($orderHasDelivered) {
+                return (int) ($deliveredMap[$key] ?? 0);
+            }
+
+            return (int) ($orderedMap[$key] ?? 0);
         };
 
         $allKeys = array_unique(array_merge(
@@ -1426,9 +1435,9 @@ class OrderDeliveryController extends Controller
         }
     }
 
-    private function parseDate(string $dateString)
+    private function parseDate(?string $dateString)
     {
-        if (empty($dateString) || strtolower($dateString) == 'null' || $dateString == '00.00.0000') return null;
+        if (empty($dateString) || strtolower((string)$dateString) == 'null' || $dateString == '00.00.0000') return null;
 
         // Remove time part if it exists
         $dateOnly = explode(' ', trim($dateString))[0];

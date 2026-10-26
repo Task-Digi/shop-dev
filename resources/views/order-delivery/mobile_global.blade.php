@@ -356,9 +356,12 @@
         _lastKnownUnits     = {{ $latestScan->units ?? 'null' }};
         _lastKnownScanned   = {{ $latestScan->scanned_total ?? 'null' }};
         @php
+            $__orderHasDelivered = isset($latestScan->order_id)
+                ? \App\Models\OrderItem::where('order_id', $latestScan->order_id)->where('delivered', '>', 0)->exists()
+                : (isset($latestScan->delivery_target_total) && $latestScan->delivery_target_total > 0);
             $__gDelivered = isset($latestScan->delivery_target_total) ? (int)$latestScan->delivery_target_total : 0;
             $__gOrdered = isset($latestScan->ordered_total) ? (int)$latestScan->ordered_total : 0;
-            $__gTarget = $__gDelivered > 0 ? $__gDelivered : $__gOrdered;
+            $__gTarget = $__orderHasDelivered ? $__gDelivered : $__gOrdered;
             $__gScanned = isset($latestScan->scanned_total) ? (int)$latestScan->scanned_total : 0;
         @endphp
         _lastKnownRemaining = {{ isset($latestScan->ordered_total, $latestScan->scanned_total) ? max(0, $__gTarget - $__gScanned) : 'null' }};
@@ -403,8 +406,8 @@
                         </div>
                         <div class="metrics-grid mb-3">
                             <div class="metric-box">
-                                <span class="metric-label">Ordered</span>
-                                <span class="metric-val row-ordered-val" data-ean="${data.ean_code}">${data.ordered}</span>
+                                <span class="metric-label">Delivered</span>
+                                <span class="metric-val row-ordered-val" data-ean="${data.ean_code}">${data.delivery_target !== undefined ? data.delivery_target : data.ordered}${(data.ordered !== undefined && data.delivery_target !== undefined && data.ordered != data.delivery_target) ? ` <small class="text-muted" style="font-size:0.7em;">(Ord: ${data.ordered})</small>` : ''}</span>
                             </div>
                             <div class="metric-box">
                                 <span class="metric-label">Scanned</span>

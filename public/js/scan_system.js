@@ -446,7 +446,9 @@
             const t = parseInt(sampleRow.getAttribute('data-delivery-target') || '', 10);
             if (!Number.isNaN(t)) foundTarget = t;
         }
-        if (!foundTarget) foundTarget = foundOrdered;
+        if (foundTarget === undefined || Number.isNaN(foundTarget)) {
+            foundTarget = foundOrdered;
+        }
 
         const pendingId = 'pending-' + Date.now();
         const nextScanned = foundScanned + 1;
@@ -949,8 +951,14 @@
         const scannedElems = document.querySelectorAll('.row-scanned-val[data-ean="' + data.ean_code + '"]');
         scannedElems.forEach(el => el.textContent = data.scanned);
 
+        const targetVal = data.delivery_target !== undefined ? data.delivery_target : data.ordered;
         const orderedElems = document.querySelectorAll('.row-ordered-val[data-ean="' + data.ean_code + '"]');
-        orderedElems.forEach(el => el.textContent = data.ordered);
+        orderedElems.forEach(el => {
+            const ordNote = (data.ordered !== undefined && data.ordered != targetVal)
+                ? ` <div class="text-muted" style="font-size: 0.72rem; font-weight: 500;" title="Ordered Quantity">(Ord: ${data.ordered})</div>`
+                : '';
+            el.innerHTML = `<span class="delivered-qty-val">${targetVal}</span>${ordNote}`;
+        });
 
         if (data.delivery_target !== undefined) {
             document.querySelectorAll('tr[data-ean="' + data.ean_code + '"], .history-item-minimal[data-ean="' + data.ean_code + '"]').forEach(r => {
@@ -1075,7 +1083,10 @@
                     </div>
                     ` : ''}
                 </td>
-                <td class="row-ordered-val col-ordered fw-600 text-secondary" data-ean="${data.ean_code}">${data.ordered}</td>
+                <td class="row-ordered-val col-ordered fw-600 text-secondary" data-ean="${data.ean_code}">
+                    <span class="delivered-qty-val">${data.delivery_target !== undefined ? data.delivery_target : data.ordered}</span>
+                    ${(data.ordered !== undefined && data.delivery_target !== undefined && data.ordered != data.delivery_target) ? `<div class="text-muted" style="font-size: 0.72rem; font-weight: 500;" title="Ordered Quantity">(Ord: ${data.ordered})</div>` : ''}
+                </td>
                 <td class="row-scanned-val col-scanned fw-700 text-dark" data-ean="${data.ean_code}">${data.scanned}</td>
                 <td class="row-remaining-val col-rest fw-700 ${restClass}" data-ean="${data.ean_code}">${data.remaining}</td>
                 <td class="col-qty">
@@ -1136,8 +1147,11 @@
 
                         <div class="metrics-grid mb-3">
                             <div class="metric-box">
-                                <span class="metric-label">Ordered</span>
-                                <span class="metric-val row-ordered-val" data-ean="${data.ean_code}">${data.ordered}</span>
+                                <span class="metric-label">Delivered</span>
+                                <span class="metric-val row-ordered-val" data-ean="${data.ean_code}">
+                                    <span class="delivered-qty-val">${data.delivery_target !== undefined ? data.delivery_target : data.ordered}</span>
+                                    ${(data.ordered !== undefined && data.delivery_target !== undefined && data.ordered != data.delivery_target) ? `<small class="text-muted" style="font-size: 0.7em;">(Ord: ${data.ordered})</small>` : ''}
+                                </span>
                             </div>
                             <div class="metric-box">
                                 <span class="metric-label">Scanned</span>
@@ -1670,7 +1684,7 @@
                     <thead>
                         <tr style="text-align: left;">
                             <th class="pdf-col-product">PRODUCT</th>
-                            <th class="pdf-col-num">ORDERED</th>
+                            <th class="pdf-col-num">DELIVERED</th>
                             <th class="pdf-col-num">SCANNED</th>
                             <th class="pdf-col-num">REST</th>
                             <th class="pdf-col-status">STATUS</th>
