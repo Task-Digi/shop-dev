@@ -174,6 +174,7 @@
     // Keep last applied server event timestamp per scan to ignore stale out-of-order updates.
     const _lastAppliedEventTsByScan = new Map();
     let _lastAppliedGlobalEventTs = 0;
+    let _serverReconcileInFlight = false;
 
     function markSelfInitiated(scanId) {
         if (scanId) {
@@ -206,6 +207,7 @@
         if (!incomingTs) return true; // Backward compatibility for older payloads.
         const lastTs = _lastAppliedEventTsByScan.get(scanKey) || 0;
         if (incomingTs < lastTs) return false;
+        if (incomingTs === lastTs && !hasMeaningfulDiffAgainstUI(data)) return false;
         _lastAppliedEventTsByScan.set(scanKey, incomingTs);
         return true;
     }
@@ -228,6 +230,9 @@
 
     function reconcileFromServerLatest() {
         if (!window.ScanConfig || !window.ScanConfig.routes || !window.ScanConfig.routes.sync) return;
+        if (_serverReconcileInFlight) return;
+
+        _serverReconcileInFlight = true;
 
         fetch('/order-delivery/' + window.ScanConfig.orderId + '/latest-scan', { cache: 'no-store' })
             .then(r => r.json())
@@ -260,7 +265,10 @@
                 }
                 setSyncStatus('active');
             })
-            .catch(() => setSyncStatus('error'));
+            .catch(() => setSyncStatus('error'))
+            .finally(() => {
+                _serverReconcileInFlight = false;
+            });
     }
 
     // Mobile-specific: sync the displayed card with what the other device just did
@@ -401,6 +409,20 @@
         });
         pusher.connection.bind('disconnected', () => setSyncStatus('error'));
         setSyncStatus('syncing');
+    }
+
+    // Pusher is the fast path, but a suspended phone, weak Wi-Fi, or a brief
+    // websocket disconnect can lose an event. Mobile views already have their
+    // own polling loop; keep desktop eventually consistent with server truth too.
+    if (window.ScanConfig && !window.ScanConfig.isMobileView) {
+        setInterval(() => {
+            if (!document.hidden) reconcileFromServerLatest();
+        }, 2000);
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) reconcileFromServerLatest();
+        });
+        window.addEventListener('focus', reconcileFromServerLatest);
     }
 
 
@@ -1819,17 +1841,25 @@
 
     // --- Init ---
     document.addEventListener('DOMContentLoaded', () => {
-        // Keep the keyboard closed when an action button is touched. Do not cancel
-        // touchstart: on mobile browsers that also cancels the synthetic click and
-        // makes +, -, and #OK appear unresponsive.
-        ['mousedown', 'touchstart'].forEach(evtName => {
-            document.addEventListener(evtName, (event) => {
-                if (!isMobileTouchDevice()) return;
-                const adjustButton = event.target.closest('.qty-btn, .qty-btn-minimal');
-                if (!adjustButton) return;
-                hideSoftKeyboard();
-            }, { passive: true, capture: true });
-        });
+        // Mobile Safari/Chrome do not always emit the synthetic click after a
+        // touch when blurring the focused scanner/quantity input changes the DOM.
+        // Activate the control explicitly on touchend and cancel only the delayed
+        // synthetic click, so one tap always performs exactly one action.
+        document.addEventListener('touchend', (event) => {
+            if (!isMobileTouchDevice()) return;
+            const actionButton = event.target.closest('.qty-btn, .qty-btn-minimal, .btn-delete-action');
+            if (!actionButton || actionButton.disabled) return;
+
+            event.preventDefault();
+            hideSoftKeyboard();
+            actionButton.click();
+        }, { passive: false, capture: true });
+
+        document.addEventListener('mousedown', (event) => {
+            if (!isMobileTouchDevice()) return;
+            const actionButton = event.target.closest('.qty-btn, .qty-btn-minimal, .btn-delete-action');
+            if (actionButton) hideSoftKeyboard();
+        }, { passive: true, capture: true });
 
         // Quantity fields: on touch devices keep readonly until the user focuses the field explicitly (then keyboard is OK).
         function applyTouchReadonlyQty() {
