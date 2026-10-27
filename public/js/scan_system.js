@@ -1032,6 +1032,15 @@
                     badge.style.background = color + '15';
                 }
             }
+
+            const okButton = row.querySelector('button[onclick^="matchOrderScans("]');
+            if (okButton) {
+                okButton.disabled = data.status !== 'COMPLETE';
+                okButton.title = data.status === 'COMPLETE'
+                    ? 'Confirm fully scanned delivery'
+                    : 'Scan all delivered units first';
+                okButton.style.opacity = okButton.disabled ? '0.45' : '';
+            }
         });
 
         const progressBar = document.querySelector('.progress-bar');
@@ -1203,7 +1212,7 @@
                         </div>
 
                         <div class="d-flex justify-content-center align-items-center gap-4 ${isPending ? 'invisible' : ''}">
-                            <button type="button" class="qty-btn-minimal fw-800" style="color: #2563eb; background: #eff6ff; border-radius: 8px; font-size: 1rem; padding: 0 10px;" onclick="matchOrderScans(${data.scan_id})">#OK</button>
+                            <button type="button" class="qty-btn-minimal fw-800" style="color: #2563eb; background: #eff6ff; border-radius: 8px; font-size: 1rem; padding: 0 10px;" onclick="matchOrderScans(${data.scan_id})" ${data.status === 'COMPLETE' ? '' : 'disabled'} title="${data.status === 'COMPLETE' ? 'Confirm fully scanned delivery' : 'Scan all delivered units first'}">#OK</button>
                             <div class="qty-pill-minimal">
                                 <button type="button" class="qty-btn-minimal" onclick="updateUnits(${data.scan_id}, -1)">−</button>
                                 <span class="qty-val-minimal" id="mobile-qty-val-${data.scan_id}" style="display: none;">${data.scanned ?? data.units ?? 1}</span>
