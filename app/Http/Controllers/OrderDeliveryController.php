@@ -758,22 +758,8 @@ class OrderDeliveryController extends Controller
         });
         $totalTarget = $totalDeliveredTarget > 0 ? $totalDeliveredTarget : $totalOrderedTarget;
 
-        $currentScanned = (int) OrderScan::where('order_id', $orderId)
-            ->where('deactivated', false)
-            ->whereIn('ean_code', $identityCodes->all())
-            ->sum('units');
-
-        if ($currentScanned !== $totalTarget) {
-            return response()->json([
-                'success' => false,
-                'message' => "Scan all delivered units first. Scanned: {$currentScanned} / Delivered: {$totalTarget}.",
-                'scanned' => $currentScanned,
-                'delivery_target' => $totalTarget,
-            ], 422);
-        }
-
-        // The count is already correct. Consolidate legacy duplicate rows and
-        // confirm the product without changing the verified scanned quantity.
+        // Consolidate legacy duplicate scan rows and make this row represent the
+        // complete product quantity shown on both mobile and desktop.
         [$scan, $removedScanIds] = $this->consolidateProductScans($scan, $totalTarget);
 
         $state = $this->getProductState($orderId, $scan->ean_code);

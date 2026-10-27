@@ -416,7 +416,7 @@
                             <div class="d-flex justify-content-center align-items-center gap-4">
                                 <button type="button" class="qty-btn-minimal fw-800"
                                         style="color:#2563eb;background:#eff6ff;border-radius:8px;font-size:1rem;padding:0 10px;"
-                                        onclick="matchOrderScans(${d.scan_id})" ${d.status === 'COMPLETE' ? '' : 'disabled'} title="${d.status === 'COMPLETE' ? 'Confirm fully scanned delivery' : 'Scan all delivered units first'}">#OK</button>
+                                        onclick="matchOrderScans(${d.scan_id})">#OK</button>
                                 <div class="qty-pill-minimal">
                                     <button type="button" class="qty-btn-minimal" onclick="updateUnits(${d.scan_id},-1)">−</button>
                                     <input type="number" inputmode="numeric" class="qty-input-minimal qty-input-${d.scan_id}"

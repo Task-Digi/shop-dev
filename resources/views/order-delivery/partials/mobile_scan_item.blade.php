@@ -70,7 +70,7 @@ $eanMissing = !empty($scan->sku) && !empty($scan->ean_code) && strval($scan->ean
         </div>
 
         <div class="d-flex justify-content-center align-items-center gap-4">
-            <button type="button" class="qty-btn-minimal fw-800" style="color: #2563eb; background: #eff6ff; border-radius: 8px; font-size: 1rem; padding: 0 10px;" onclick="matchOrderScans({{ $scan->id }})" @disabled($statusText !== 'COMPLETE') title="{{ $statusText === 'COMPLETE' ? 'Confirm fully scanned delivery' : 'Scan all delivered units first' }}">#OK</button>
+            <button type="button" class="qty-btn-minimal fw-800" style="color: #2563eb; background: #eff6ff; border-radius: 8px; font-size: 1rem; padding: 0 10px;" onclick="matchOrderScans({{ $scan->id }})">#OK</button>
             <div class="qty-pill-minimal">
                 <button type="button" class="qty-btn-minimal" onclick="updateUnits({{ $scan->id }}, -1)">−</button>
                 <span class="qty-val-minimal" id="mobile-qty-val-{{ $scan->id }}" style="display: none;">{{ $scannedSoFar }}</span>
