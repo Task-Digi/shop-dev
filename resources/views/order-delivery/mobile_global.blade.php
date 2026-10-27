@@ -419,7 +419,7 @@
                             </div>
                             <div class="metric-box">
                                 <span class="metric-label">#</span>
-                                <span class="metric-val units-val" id="mq-${data.scan_id}">${data.units}</span>
+                                <span class="metric-val units-val" id="mq-${data.scan_id}">${data.scanned}</span>
                             </div>
                         </div>
                         <div class="d-flex justify-content-center align-items-center gap-4">
@@ -431,7 +431,7 @@
                                         onclick="updateUnits(${data.scan_id}, -1)">−</button>
                                 <input type="number" inputmode="numeric" class="qty-input-minimal qty-input-${data.scan_id}"
                                        id="mobile-qty-input-${data.scan_id}"
-                                       value="${data.units}"
+                                       value="${data.scanned}"
                                        onchange="updateUnitsExact(${data.scan_id}, this.value)"
                                        style="width:50px;text-align:center;font-weight:800;font-size:1.2rem;border:none;background:transparent;padding:0;margin:0 5px;color:#1e293b;outline:none;">
                                 <button type="button" class="qty-btn-minimal text-success"

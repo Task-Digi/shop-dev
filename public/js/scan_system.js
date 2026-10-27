@@ -899,6 +899,15 @@
     function updateUIRow(data) {
         if (!data.ean_code) return;
 
+        // The server consolidates legacy duplicate rows for the same product.
+        // Remove those retired rows immediately on every connected device.
+        (data.removed_scan_ids || []).forEach((removedId) => {
+            const desktopRow = document.getElementById('scan-' + removedId);
+            if (desktopRow) desktopRow.remove();
+            const mobileRow = document.getElementById('mobile-scan-' + removedId);
+            if (mobileRow) mobileRow.remove();
+        });
+
         // Update Scan-specific elements if scan_id is provided
         if (data.scan_id) {
             // Find instances of this scan row
@@ -917,8 +926,8 @@
 
             desktopRows.forEach(row => {
                 const qtyBadge = row.querySelector('.col-qty .units-val, .col-qty .badge');
-                if (qtyBadge && data.units !== undefined) {
-                    qtyBadge.textContent = data.units;
+                if (qtyBadge && (data.scanned !== undefined || data.units !== undefined)) {
+                    qtyBadge.textContent = data.scanned !== undefined ? data.scanned : data.units;
                 }
 
                 // CLEANUP: Remove pending/optimistic styles
@@ -944,11 +953,15 @@
             });
 
             qtyInputs.forEach(input => {
-                if (data.units !== undefined) input.value = data.units;
+                if (data.scanned !== undefined || data.units !== undefined) {
+                    input.value = data.scanned !== undefined ? data.scanned : data.units;
+                }
             });
 
             mobileQtyVals.forEach(el => {
-                if (data.units !== undefined) el.textContent = data.units;
+                if (data.scanned !== undefined || data.units !== undefined) {
+                    el.textContent = data.scanned !== undefined ? data.scanned : data.units;
+                }
 
                 // For mobile items that aren't the same as scanRows (different structure)
                 const mobileItem = el.closest('.history-item-minimal');
@@ -1112,7 +1125,7 @@
                 <td class="row-scanned-val col-scanned fw-700 text-dark" data-ean="${data.ean_code}">${data.scanned}</td>
                 <td class="row-remaining-val col-rest fw-700 ${restClass}" data-ean="${data.ean_code}">${data.remaining}</td>
                 <td class="col-qty">
-                    <span class="badge bg-light text-secondary border-0 fw-700 p-1 units-val" style="font-size: 0.75rem;">${data.units || 1}</span>
+                    <span class="badge bg-light text-secondary border-0 fw-700 p-1 units-val" style="font-size: 0.75rem;">${data.scanned ?? data.units ?? 1}</span>
                 </td>
                 <td class="col-status">
                     <span class="status-badge-modern" style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 800;">
@@ -1123,7 +1136,7 @@
                     <div class="d-flex justify-content-center gap-1 ${isPending ? 'invisible' : ''}">
                         <div class="qty-pill">
                             <button type="button" class="qty-btn" onclick="updateUnits(${data.scan_id}, -1)">-</button>
-                            <input type="number" class="qty-input qty-input-${data.scan_id}" id="qty-input-${data.scan_id}" value="${data.units || 1}" onchange="updateUnitsExact(${data.scan_id}, this.value)" style="width: 30px; height: 18px; text-align: center; border: none; font-weight: 700;">
+                            <input type="number" class="qty-input qty-input-${data.scan_id}" id="qty-input-${data.scan_id}" value="${data.scanned ?? data.units ?? 1}" onchange="updateUnitsExact(${data.scan_id}, this.value)" style="width: 30px; height: 18px; text-align: center; border: none; font-weight: 700;">
                             <button type="button" class="qty-btn text-success" onclick="updateUnits(${data.scan_id}, 1)">+</button>
                         </div>
                         <button class="btn btn-link text-danger p-0" onclick="deleteScan(${data.scan_id})">
@@ -1185,7 +1198,7 @@
                             </div>
                             <div class="metric-box">
                                 <span class="metric-label">#</span>
-                                <span class="metric-val qty-val-minimal" id="mobile-qty-display-${data.scan_id}">${data.units || 1}</span>
+                                <span class="metric-val qty-val-minimal" id="mobile-qty-display-${data.scan_id}">${data.scanned ?? data.units ?? 1}</span>
                             </div>
                         </div>
 
@@ -1193,8 +1206,8 @@
                             <button type="button" class="qty-btn-minimal fw-800" style="color: #2563eb; background: #eff6ff; border-radius: 8px; font-size: 1rem; padding: 0 10px;" onclick="matchOrderScans(${data.scan_id})">#OK</button>
                             <div class="qty-pill-minimal">
                                 <button type="button" class="qty-btn-minimal" onclick="updateUnits(${data.scan_id}, -1)">−</button>
-                                <span class="qty-val-minimal" id="mobile-qty-val-${data.scan_id}" style="display: none;">${data.units || 1}</span>
-                                <input type="number" inputmode="numeric" class="qty-input-minimal" id="mobile-qty-input-${data.scan_id}" value="${data.units || 1}" onchange="updateUnitsExact(${data.scan_id}, this.value)" style="width: 50px; text-align: center; font-weight: 800; font-size: 1.2rem; border: none; background: transparent; padding: 0; margin: 0 5px; color: #1e293b; outline: none; -moz-appearance: textfield;">
+                                <span class="qty-val-minimal" id="mobile-qty-val-${data.scan_id}" style="display: none;">${data.scanned ?? data.units ?? 1}</span>
+                                <input type="number" inputmode="numeric" class="qty-input-minimal" id="mobile-qty-input-${data.scan_id}" value="${data.scanned ?? data.units ?? 1}" onchange="updateUnitsExact(${data.scan_id}, this.value)" style="width: 50px; text-align: center; font-weight: 800; font-size: 1.2rem; border: none; background: transparent; padding: 0; margin: 0 5px; color: #1e293b; outline: none; -moz-appearance: textfield;">
                                 <button type="button" class="qty-btn-minimal text-success" onclick="updateUnits(${data.scan_id}, 1)">+</button>
                             </div>
                             <button class="btn-delete-action shadow-sm" onclick="deleteScan(${data.scan_id})">

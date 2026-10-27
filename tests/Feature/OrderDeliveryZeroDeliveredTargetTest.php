@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -208,5 +209,72 @@ class OrderDeliveryZeroDeliveredTargetTest extends TestCase
             'order_id' => $orderId,
             'status' => 'Started',
         ]);
+    }
+
+    public function test_mobile_quantity_actions_consolidate_duplicate_product_scans(): void
+    {
+        config(['broadcasting.default' => 'null']);
+
+        $orderId = 'MOBILE-SYNC-ORDER';
+        OrderRecord::create(['order_id' => $orderId, 'status' => 'Started']);
+        Product::create([
+            'product_id' => 'SKU-MOBILE',
+            'ean_code' => '7029350262046',
+            'product_name' => 'Mobile Product',
+        ]);
+        OrderItem::create([
+            'order_id' => $orderId,
+            'sku' => 'SKU-MOBILE',
+            'item_name' => 'Mobile Product',
+            'ordered_quantity' => 3,
+            'quantity' => 3,
+            'delivered' => 3,
+        ]);
+
+        $first = OrderScan::create([
+            'order_id' => $orderId,
+            'ean_code' => '7029350262046',
+            'units' => 1,
+            'deactivated' => false,
+        ]);
+        $duplicate = OrderScan::create([
+            'order_id' => $orderId,
+            'ean_code' => 'SKU-MOBILE',
+            'units' => 2,
+            'deactivated' => false,
+        ]);
+
+        $controller = app(OrderDeliveryController::class);
+        $minusResponse = $controller->updateUnits(Request::create('/order-delivery/update-units', 'POST', [
+            'scan_id' => $first->id,
+            'change' => -1,
+        ]));
+        $minusData = $minusResponse->getData(true);
+
+        $this->assertTrue($minusData['success']);
+        $this->assertSame(2, $minusData['units']);
+        $this->assertSame(2, $minusData['scanned']);
+        $this->assertContains($duplicate->id, $minusData['removed_scan_ids']);
+        $this->assertDatabaseHas('order_scans', ['id' => $first->id, 'units' => 2, 'deactivated' => false]);
+        $this->assertDatabaseHas('order_scans', ['id' => $duplicate->id, 'deactivated' => true]);
+
+        $okResponse = $controller->updateUnitsToMatchOrder(Request::create('/order-delivery/match-order', 'POST', [
+            'scan_id' => $first->id,
+        ]));
+        $okData = $okResponse->getData(true);
+
+        $this->assertTrue($okData['success']);
+        $this->assertSame(3, $okData['units']);
+        $this->assertSame(3, $okData['scanned']);
+
+        $scanResponse = $controller->scan(Request::create('/order-delivery/scan', 'POST', [
+            'order_id' => $orderId,
+            'ean_code' => '7029350262046',
+        ]));
+        $scanData = $scanResponse->getData(true);
+
+        $this->assertSame($first->id, $scanData['scan_id']);
+        $this->assertSame(4, $scanData['units']);
+        $this->assertSame(1, OrderScan::where('order_id', $orderId)->where('deactivated', false)->count());
     }
 }

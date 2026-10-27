@@ -65,7 +65,7 @@ $eanMissing = !empty($scan->sku) && !empty($scan->ean_code) && strval($scan->ean
             </div>
             <div class="metric-box">
                 <span class="metric-label">#</span>
-                <span class="metric-val qty-val-minimal" id="mobile-qty-display-{{ $scan->id }}">{{ $scan->units }}</span>
+                <span class="metric-val qty-val-minimal" id="mobile-qty-display-{{ $scan->id }}">{{ $scannedSoFar }}</span>
             </div>
         </div>
 
@@ -73,8 +73,8 @@ $eanMissing = !empty($scan->sku) && !empty($scan->ean_code) && strval($scan->ean
             <button type="button" class="qty-btn-minimal fw-800" style="color: #2563eb; background: #eff6ff; border-radius: 8px; font-size: 1rem; padding: 0 10px;" onclick="matchOrderScans({{ $scan->id }})">#OK</button>
             <div class="qty-pill-minimal">
                 <button type="button" class="qty-btn-minimal" onclick="updateUnits({{ $scan->id }}, -1)">−</button>
-                <span class="qty-val-minimal" id="mobile-qty-val-{{ $scan->id }}" style="display: none;">{{ $scan->units }}</span>
-                <input type="number" inputmode="numeric" class="qty-input-minimal" id="mobile-qty-input-{{ $scan->id }}" value="{{ $scan->units }}" onchange="updateUnitsExact({{ $scan->id }}, this.value)" style="width: 50px; text-align: center; font-weight: 800; font-size: 1.2rem; border: none; background: transparent; padding: 0; margin: 0 5px; color: #1e293b; outline: none; -moz-appearance: textfield;">
+                <span class="qty-val-minimal" id="mobile-qty-val-{{ $scan->id }}" style="display: none;">{{ $scannedSoFar }}</span>
+                <input type="number" inputmode="numeric" class="qty-input-minimal" id="mobile-qty-input-{{ $scan->id }}" value="{{ $scannedSoFar }}" onchange="updateUnitsExact({{ $scan->id }}, this.value)" style="width: 50px; text-align: center; font-weight: 800; font-size: 1.2rem; border: none; background: transparent; padding: 0; margin: 0 5px; color: #1e293b; outline: none; -moz-appearance: textfield;">
                 <button type="button" class="qty-btn-minimal text-success" onclick="updateUnits({{ $scan->id }}, 1)">+</button>
             </div>
             <button class="btn-delete-action shadow-sm" onclick="deleteScan({{ $scan->id }})">

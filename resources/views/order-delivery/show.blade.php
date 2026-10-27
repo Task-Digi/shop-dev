@@ -1502,7 +1502,7 @@
                                 <div class="qty-pill-minimal">
                                     @if(!$isVirtual)
                                     <button type="button" class="qty-btn-minimal" onclick="updateUnits({{ $scan->id }}, -1)">−</button>
-                                    <span class="qty-val-minimal mobile-qty-val-{{ $scan->id }}">{{ $scan->units }}</span>
+                                    <span class="qty-val-minimal mobile-qty-val-{{ $scan->id }}">{{ $scannedSoFar }}</span>
                                     <button type="button" class="qty-btn-minimal text-success" onclick="updateUnits({{ $scan->id }}, 1)">+</button>
                                     @else
                                     <span class="text-muted small">0</span>
@@ -1568,13 +1568,13 @@
                                         </td>
                                         <td class="row-scanned-val col-scanned fw-700 text-dark" data-ean="{{ $scan->ean_code }}">{{ $scannedSoFar }}</td>
                                         <td class="row-remaining-val col-rest fw-700 {{ $remaining > 0 ? 'text-primary' : 'text-success' }}" data-ean="{{ $scan->ean_code }}">{{ $remaining }}</td>
-                                        <td class="col-qty"><span class="badge bg-light text-secondary border-0 fw-700 p-1 units-val" style="font-size: 0.75rem;">{{ $scan->units }}</span></td>
+                                        <td class="col-qty"><span class="badge bg-light text-secondary border-0 fw-700 p-1 units-val" style="font-size: 0.75rem;">{{ $scannedSoFar }}</span></td>
                                         <td class="col-status"><span class="status-badge-modern" style="background: {{ $statusColor }}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 800;">{{ $statusText }}</span></td>
                                         <td class="col-action">
                                             <div class="d-flex justify-content-center gap-1">
                                                 <div class="qty-pill">
                                                     <button type="button" class="qty-btn" onclick="updateUnits({{ $scan->id }}, -1)">-</button>
-                                                    <input type="number" inputmode="numeric" class="qty-input qty-input-{{ $scan->id }}" id="qty-input-{{ $scan->id }}" value="{{ $scan->units }}" onchange="updateUnitsExact({{ $scan->id }}, this.value)" style="width: 30px; height: 20px; text-align: center; font-weight: 700; font-size: 0.8rem; border: none; background: transparent; padding: 0; color: #1e293b; outline: none;">
+                                                    <input type="number" inputmode="numeric" class="qty-input qty-input-{{ $scan->id }}" id="qty-input-{{ $scan->id }}" value="{{ $scannedSoFar }}" onchange="updateUnitsExact({{ $scan->id }}, this.value)" style="width: 30px; height: 20px; text-align: center; font-weight: 700; font-size: 0.8rem; border: none; background: transparent; padding: 0; color: #1e293b; outline: none;">
                                                     <button type="button" class="qty-btn text-success" onclick="updateUnits({{ $scan->id }}, 1)">+</button>
                                                 </div>
                                                 <button type="button" class="btn btn-link text-danger p-0" onclick="deleteScan({{ $scan->id }})">
@@ -1683,7 +1683,7 @@
                                     <td class="row-scanned-val col-scanned fw-700 text-dark" data-ean="{{ $scan->ean_code }}">{{ $scannedSoFar }}</td>
                                     <td class="row-remaining-val col-rest fw-700 {{ $remaining > 0 ? 'text-primary' : 'text-success' }}" data-ean="{{ $scan->ean_code }}">{{ $remaining }}</td>
                                     <td class="col-qty">
-                                        <span class="badge bg-light text-secondary border-0 fw-700 p-1 units-val" style="font-size: 0.75rem;">{{ $scan->units }}</span>
+                                        <span class="badge bg-light text-secondary border-0 fw-700 p-1 units-val" style="font-size: 0.75rem;">{{ $scannedSoFar }}</span>
                                     </td>
                                     <td class="col-status">
                                         <span class="status-badge-modern" style="background: {{ $statusColor }}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 800;">
@@ -1695,7 +1695,7 @@
                                         <div class="d-flex justify-content-center gap-1">
                                             <div class="qty-pill">
                                                 <button type="button" class="qty-btn" onclick="updateUnits({{ $scan->id }}, -1)">-</button>
-                                                <input type="number" inputmode="numeric" class="qty-input qty-input-{{ $scan->id }}" id="qty-input-{{ $scan->id }}" value="{{ $scan->units }}" onchange="updateUnitsExact({{ $scan->id }}, this.value)" style="width: 30px; height: 20px; text-align: center; font-weight: 700; font-size: 0.8rem; border: none; background: transparent; padding: 0; color: #1e293b; outline: none; -moz-appearance: textfield;">
+                                                <input type="number" inputmode="numeric" class="qty-input qty-input-{{ $scan->id }}" id="qty-input-{{ $scan->id }}" value="{{ $scannedSoFar }}" onchange="updateUnitsExact({{ $scan->id }}, this.value)" style="width: 30px; height: 20px; text-align: center; font-weight: 700; font-size: 0.8rem; border: none; background: transparent; padding: 0; color: #1e293b; outline: none; -moz-appearance: textfield;">
                                                 <button type="button" class="qty-btn text-success" onclick="updateUnits({{ $scan->id }}, 1)">+</button>
                                             </div>
                                             <button class="btn btn-link text-danger p-0" onclick="deleteScan({{ $scan->id }})">
@@ -1885,5 +1885,4 @@
 
 </html>
 </html>
-
 

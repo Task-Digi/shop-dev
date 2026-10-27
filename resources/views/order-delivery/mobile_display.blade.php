@@ -411,7 +411,7 @@
                                 <div class="metric-box"><span class="metric-label">Delivered</span><span class="metric-val row-ordered-val" data-ean="${d.ean_code}">${d.delivery_target !== undefined ? d.delivery_target : d.ordered}${(d.ordered !== undefined && d.delivery_target !== undefined && d.ordered != d.delivery_target) ? ` <small class="text-muted" style="font-size:0.7em;">(Ord: ${d.ordered})</small>` : ''}</span></div>
                                 <div class="metric-box"><span class="metric-label">Scanned</span><span class="metric-val row-scanned-val" data-ean="${d.ean_code}">${d.scanned}</span></div>
                                 <div class="metric-box"><span class="metric-label">Rest</span><span class="metric-val remaining row-remaining-val" data-ean="${d.ean_code}">${d.remaining}</span></div>
-                                <div class="metric-box"><span class="metric-label">#</span><span class="metric-val units-val" id="mq-${d.scan_id}">${d.units}</span></div>
+                                <div class="metric-box"><span class="metric-label">#</span><span class="metric-val units-val" id="mq-${d.scan_id}">${d.scanned}</span></div>
                             </div>
                             <div class="d-flex justify-content-center align-items-center gap-4">
                                 <button type="button" class="qty-btn-minimal fw-800"
@@ -420,7 +420,7 @@
                                 <div class="qty-pill-minimal">
                                     <button type="button" class="qty-btn-minimal" onclick="updateUnits(${d.scan_id},-1)">−</button>
                                     <input type="number" inputmode="numeric" class="qty-input-minimal qty-input-${d.scan_id}"
-                                           id="mobile-qty-input-${d.scan_id}" value="${d.units}"
+                                           id="mobile-qty-input-${d.scan_id}" value="${d.scanned}"
                                            onchange="updateUnitsExact(${d.scan_id},this.value)"
                                            style="width:50px;text-align:center;font-weight:800;font-size:1.2rem;border:none;background:transparent;padding:0;margin:0 5px;color:#1e293b;outline:none;">
                                     <button type="button" class="qty-btn-minimal text-success" onclick="updateUnits(${d.scan_id},1)">+</button>

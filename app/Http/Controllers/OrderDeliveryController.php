@@ -464,14 +464,34 @@ class OrderDeliveryController extends Controller
         $orderId = $request->order_id;
         $ean = trim((string)$request->ean_code);
 
-        // 1. Register Scan - ALWAYS create a new record
-        // Note: We save exactly what was scanned. If it was an ID, we save the ID.
-        $scan = OrderScan::create([
-            'order_id' => $orderId,
-            'scan_date_time' => Carbon::now(),
-            'ean_code' => $ean,
-            'units' => 1
-        ]);
+        // Keep one active quantity row per product. Older versions created one
+        // row per barcode read, which made mobile and desktop show different #
+        // values for the same product.
+        $identityCodes = $this->productIdentityCodes($ean);
+        $existingScan = OrderScan::where('order_id', $orderId)
+            ->where('deactivated', false)
+            ->whereIn('ean_code', $identityCodes)
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($existingScan) {
+            $activeTotal = (int) OrderScan::where('order_id', $orderId)
+                ->where('deactivated', false)
+                ->whereIn('ean_code', $identityCodes)
+                ->sum('units');
+            [$scan, $removedScanIds] = $this->consolidateProductScans($existingScan, $activeTotal + 1);
+            $scan->scan_date_time = Carbon::now();
+            $scan->save();
+        } else {
+            $scan = OrderScan::create([
+                'order_id' => $orderId,
+                'scan_date_time' => Carbon::now(),
+                'ean_code' => $ean,
+                'units' => 1
+            ]);
+            $removedScanIds = [];
+        }
 
         // 2. Get high-fidelity state
         $state = $this->getProductState($orderId, $ean);
@@ -507,6 +527,7 @@ class OrderDeliveryController extends Controller
                 'scan_id' => $scan->id,
                 'order_id' => $orderId,
                 'units' => $scan->units,
+                'removed_scan_ids' => $removedScanIds,
                 'timestamp' => Carbon::parse($scan->scan_date_time)->format('H:i'),
                 'updated_at' => $scan->updated_at ? $scan->updated_at->valueOf() : now()->valueOf()
             ])));
@@ -514,6 +535,7 @@ class OrderDeliveryController extends Controller
                 'scan_id' => $scan->id,
                 'order_id' => $orderId,
                 'units' => $scan->units,
+                'removed_scan_ids' => $removedScanIds,
                 'timestamp' => Carbon::parse($scan->scan_date_time)->format('H:i'),
                 'updated_at' => $scan->updated_at ? $scan->updated_at->valueOf() : now()->valueOf()
             ]));
@@ -525,6 +547,7 @@ class OrderDeliveryController extends Controller
             'success' => true,
             'scan_id' => $scan->id,
             'units' => $scan->units,
+            'removed_scan_ids' => $removedScanIds,
             'timestamp' => Carbon::parse($scan->scan_date_time)->format('H:i'),
             'updated_at' => $scan->updated_at ? $scan->updated_at->valueOf() : now()->valueOf()
         ], $state));
@@ -549,11 +572,15 @@ class OrderDeliveryController extends Controller
         ]);
 
         $scan = OrderScan::findOrFail($request->scan_id);
-        $scan->units += $request->change;
-
-        if ($scan->units < 0) $scan->units = 0; // Allow 0 to properly decrement
-
-        $scan->save();
+        $identityCodes = $this->productIdentityCodes($scan->ean_code);
+        $currentTotal = (int) OrderScan::where('order_id', $scan->order_id)
+            ->where('deactivated', false)
+            ->whereIn('ean_code', $identityCodes)
+            ->sum('units');
+        [$scan, $removedScanIds] = $this->consolidateProductScans(
+            $scan,
+            max(0, $currentTotal + (int) $request->change)
+        );
 
         $state = $this->getProductState($scan->order_id, $scan->ean_code);
 
@@ -565,6 +592,7 @@ class OrderDeliveryController extends Controller
                 'scan_id' => $scan->id,
                 'order_id' => $scan->order_id,
                 'units' => $scan->units,
+                'removed_scan_ids' => $removedScanIds,
                 'timestamp' => Carbon::parse($scan->scan_date_time ?? Carbon::now())->format('H:i'),
                 'updated_at' => $scan->updated_at ? $scan->updated_at->valueOf() : now()->valueOf()
             ])));
@@ -573,6 +601,7 @@ class OrderDeliveryController extends Controller
                 'scan_id' => $scan->id,
                 'order_id' => $scan->order_id,
                 'units' => $scan->units,
+                'removed_scan_ids' => $removedScanIds,
                 'timestamp' => Carbon::parse($scan->scan_date_time ?? Carbon::now())->format('H:i'),
                 'updated_at' => $scan->updated_at ? $scan->updated_at->valueOf() : now()->valueOf()
             ]));
@@ -584,6 +613,7 @@ class OrderDeliveryController extends Controller
             'success' => true,
             'scan_id' => $scan->id,
             'units' => $scan->units,
+            'removed_scan_ids' => $removedScanIds,
             'timestamp' => Carbon::parse($scan->scan_date_time ?? Carbon::now())->format('H:i'),
             'updated_at' => $scan->updated_at ? $scan->updated_at->valueOf() : now()->valueOf()
         ], $state));
@@ -597,8 +627,7 @@ class OrderDeliveryController extends Controller
         ]);
 
         $scan = OrderScan::findOrFail($request->scan_id);
-        $scan->units = $request->units;
-        $scan->save();
+        [$scan, $removedScanIds] = $this->consolidateProductScans($scan, (int) $request->units);
 
         $state = $this->getProductState($scan->order_id, $scan->ean_code);
 
@@ -610,6 +639,7 @@ class OrderDeliveryController extends Controller
                 'scan_id' => $scan->id,
                 'order_id' => $scan->order_id,
                 'units' => $scan->units,
+                'removed_scan_ids' => $removedScanIds,
                 'timestamp' => Carbon::parse($scan->scan_date_time ?? Carbon::now())->format('H:i'),
                 'updated_at' => $scan->updated_at ? $scan->updated_at->valueOf() : now()->valueOf()
             ])));
@@ -618,6 +648,7 @@ class OrderDeliveryController extends Controller
                 'scan_id' => $scan->id,
                 'order_id' => $scan->order_id,
                 'units' => $scan->units,
+                'removed_scan_ids' => $removedScanIds,
                 'timestamp' => Carbon::parse($scan->scan_date_time ?? Carbon::now())->format('H:i'),
                 'updated_at' => $scan->updated_at ? $scan->updated_at->valueOf() : now()->valueOf()
             ]));
@@ -629,6 +660,7 @@ class OrderDeliveryController extends Controller
             'success' => true,
             'scan_id' => $scan->id,
             'units' => $scan->units,
+            'removed_scan_ids' => $removedScanIds,
             'timestamp' => Carbon::parse($scan->scan_date_time ?? Carbon::now())->format('H:i'),
             'updated_at' => $scan->updated_at ? $scan->updated_at->valueOf() : now()->valueOf()
         ], $state));
@@ -726,20 +758,9 @@ class OrderDeliveryController extends Controller
         });
         $totalTarget = $totalDeliveredTarget > 0 ? $totalDeliveredTarget : $totalOrderedTarget;
 
-        // 3) Find already scanned total for the same product (excluding the current row).
-        // We want: OtherScans + ThisScan = TotalTarget -> ThisScan = TotalTarget - OtherScans
-        $otherScanned = OrderScan::where('order_id', $orderId)
-            ->where('deactivated', false)
-            ->where('id', '!=', $scan->id)
-            ->whereIn('ean_code', $identityCodes->all())
-            ->sum('units');
-
-        // 3. Update THIS specific scan row so aggregate scanned matches LEVERT (delivered) for the line(s).
-        $scan->units = max(0, $totalTarget - $otherScanned);
-
-        // If it becomes 0, maybe we should deactivate it? But standard is 1 minimum usually.
-        // Let's allow 0 or just deactivate if it's 0 to keep data clean, but let's just save.
-        $scan->save();
+        // Consolidate legacy duplicate scan rows and make this row represent the
+        // complete product quantity shown on both mobile and desktop.
+        [$scan, $removedScanIds] = $this->consolidateProductScans($scan, $totalTarget);
 
         $state = $this->getProductState($orderId, $scan->ean_code);
 
@@ -751,6 +772,7 @@ class OrderDeliveryController extends Controller
                 'scan_id' => $scan->id,
                 'order_id' => $orderId,
                 'units' => $scan->units,
+                'removed_scan_ids' => $removedScanIds,
                 'timestamp' => Carbon::parse($scan->scan_date_time ?? Carbon::now())->format('H:i'),
                 'updated_at' => $scan->updated_at ? $scan->updated_at->valueOf() : now()->valueOf()
             ])));
@@ -759,6 +781,7 @@ class OrderDeliveryController extends Controller
                 'scan_id' => $scan->id,
                 'order_id' => $orderId,
                 'units' => $scan->units,
+                'removed_scan_ids' => $removedScanIds,
                 'timestamp' => Carbon::parse($scan->scan_date_time ?? Carbon::now())->format('H:i'),
                 'updated_at' => $scan->updated_at ? $scan->updated_at->valueOf() : now()->valueOf()
             ]));
@@ -770,9 +793,63 @@ class OrderDeliveryController extends Controller
             'success' => true,
             'scan_id' => $scan->id,
             'units' => $scan->units,
+            'removed_scan_ids' => $removedScanIds,
             'timestamp' => Carbon::parse($scan->scan_date_time ?? Carbon::now())->format('H:i'),
             'updated_at' => $scan->updated_at ? $scan->updated_at->valueOf() : now()->valueOf()
         ], $state));
+    }
+
+    /**
+     * Return every barcode/SKU value that identifies the same product.
+     */
+    private function productIdentityCodes(string $code): array
+    {
+        $code = trim($code);
+        $product = Product::where('ean_code', $code)
+            ->orWhere('product_id', $code)
+            ->first();
+
+        return collect([
+            $code,
+            $product?->ean_code,
+            $product?->product_id,
+        ])->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Store a product's total quantity in one active row and retire legacy
+     * duplicates so every device addresses the same scan record.
+     *
+     * @return array{0: OrderScan, 1: array<int>}
+     */
+    private function consolidateProductScans(OrderScan $scan, int $totalUnits): array
+    {
+        return DB::transaction(function () use ($scan, $totalUnits) {
+            $lockedScan = OrderScan::whereKey($scan->id)->lockForUpdate()->firstOrFail();
+            $identityCodes = $this->productIdentityCodes($lockedScan->ean_code);
+
+            $duplicates = OrderScan::where('order_id', $lockedScan->order_id)
+                ->where('deactivated', false)
+                ->where('id', '!=', $lockedScan->id)
+                ->whereIn('ean_code', $identityCodes)
+                ->lockForUpdate()
+                ->get();
+
+            $removedScanIds = $duplicates->pluck('id')->map(fn ($id) => (int) $id)->all();
+            if ($removedScanIds) {
+                OrderScan::whereIn('id', $removedScanIds)->update(['deactivated' => true]);
+            }
+
+            $lockedScan->deactivated = false;
+            $lockedScan->units = max(0, $totalUnits);
+            $lockedScan->save();
+
+            return [$lockedScan, $removedScanIds];
+        });
     }
 
 
