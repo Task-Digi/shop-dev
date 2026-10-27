@@ -258,6 +258,20 @@ class OrderDeliveryZeroDeliveredTargetTest extends TestCase
         $this->assertDatabaseHas('order_scans', ['id' => $first->id, 'units' => 2, 'deactivated' => false]);
         $this->assertDatabaseHas('order_scans', ['id' => $duplicate->id, 'deactivated' => true]);
 
+        $incompleteResponse = $controller->updateUnitsToMatchOrder(Request::create('/order-delivery/match-order', 'POST', [
+            'scan_id' => $first->id,
+        ]));
+        $incompleteData = $incompleteResponse->getData(true);
+
+        $this->assertFalse($incompleteData['success']);
+        $this->assertSame(422, $incompleteResponse->getStatusCode());
+        $this->assertSame(2, $incompleteData['scanned']);
+
+        $controller->updateUnits(Request::create('/order-delivery/update-units', 'POST', [
+            'scan_id' => $first->id,
+            'change' => 1,
+        ]));
+
         $okResponse = $controller->updateUnitsToMatchOrder(Request::create('/order-delivery/match-order', 'POST', [
             'scan_id' => $first->id,
         ]));
