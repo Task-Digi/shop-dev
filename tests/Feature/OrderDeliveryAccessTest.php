@@ -53,14 +53,13 @@ class OrderDeliveryAccessTest extends TestCase
         $this->actingAs($user)->get('/order-delivery')->assertForbidden();
     }
 
-    public function test_inactive_user_cannot_log_in(): void
+    public function test_inactive_user_cannot_access_orders_even_when_assigned(): void
     {
-        $this->user(['is_active' => false]);
+        $user = $this->user(['is_active' => false]);
+        $orders = Service::create(['name' => 'Orders', 'slug' => 'orders']);
+        $user->services()->attach($orders);
 
-        $this->post('/login', ['email' => 'user@example.com', 'password' => 'password'])
-            ->assertSessionHasErrors('email');
-
-        $this->assertGuest();
+        $this->assertFalse($user->canAccessService('orders'));
     }
 
     public function test_active_user_with_orders_permission_can_pass_service_check(): void

@@ -10,9 +10,19 @@ use Tests\TestCase;
 
 class SecureIvsLoginTest extends TestCase
 {
+    private const VALIDATE_URL = 'https://api.secureivs.eu/api/v2/auth/token/validate';
+
     protected function setUp(): void
     {
         parent::setUp();
+
+        config()->set('services.secureivs', [
+            'client_id' => 'test-client-id',
+            'api_key' => 'test-api-key',
+            'auth_url' => 'https://customer-api.secureivs.eu',
+            'base_url' => 'https://api.secureivs.eu',
+            'redirect_uri' => 'https://shop.example.com/login/secureivs/callback',
+        ]);
 
         Schema::create('users', function (Blueprint $table) {
             $table->id();
@@ -21,171 +31,167 @@ class SecureIvsLoginTest extends TestCase
             $table->string('password');
             $table->boolean('is_admin')->default(false);
             $table->boolean('is_active')->default(true);
+            $table->timestamp('last_login_at')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });
-
-        Schema::create('services', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('slug')->unique();
-            $table->timestamps();
-        });
-
-        Schema::create('service_user', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('service_id');
-            $table->foreignId('user_id');
-            $table->timestamps();
-        });
     }
 
-    public function test_login_directly_redirects_to_secure_ivs(): void
-    {
-        $response = $this->get('/login');
-
-        $response->assertStatus(302);
-        $targetUrl = $response->headers->get('Location');
-
-        $this->assertStringContainsString('https://customer-api.secureivs.eu', $targetUrl);
-        $this->assertStringContainsString('client_id=9b3tvZGZStRrcTsfTZifsjgkaUTER3aOKaXjshkO', $targetUrl);
-        $this->assertStringContainsString('login_method=email', $targetUrl);
-    }
-
-    public function test_login_page_renders_error_card_when_errors_exist(): void
-    {
-        $bag = new \Illuminate\Support\MessageBag(['email' => 'Sample error']);
-        $errorBag = new \Illuminate\Support\ViewErrorBag();
-        $errorBag->put('default', $bag);
-
-        $response = $this->withSession(['errors' => $errorBag])->get('/login');
-
-        $response->assertStatus(200);
-        $response->assertSee('Login with Shop Secure IVS');
-        $response->assertSee(route('login.secureivs'));
-        $response->assertDontSee('name="password"', false);
-    }
-
-    public function test_redirect_to_secure_ivs_routes_to_provider_with_client_id_and_callback(): void
+    public function test_login_redirect_contains_public_client_configuration_and_csrf_context(): void
     {
         $response = $this->get(route('login.secureivs'));
 
-        $response->assertStatus(302);
-        $targetUrl = $response->headers->get('Location');
-
-        $this->assertStringContainsString('https://customer-api.secureivs.eu', $targetUrl);
-        $this->assertStringContainsString('client_id=9b3tvZGZStRrcTsfTZifsjgkaUTER3aOKaXjshkO', $targetUrl);
-        $this->assertStringContainsString('login_method=email', $targetUrl);
-        $expectedRedirect = config('services.secureivs.redirect_uri') ?: route('login.secureivs.callback');
-        $this->assertStringContainsString(urlencode($expectedRedirect), $targetUrl);
+        $response->assertRedirectContains('https://customer-api.secureivs.eu/');
+        $target = (string) $response->headers->get('Location');
+        $this->assertStringContainsString('client_id=test-client-id', $target);
+        $this->assertStringContainsString('login_method=email', $target);
+        $this->assertStringContainsString('return_code=', $target);
+        $this->assertNotEmpty(session('secureivs.login_state'));
     }
 
-    public function test_callback_without_token_renders_callback_ready_view(): void
+    public function test_callback_logs_in_only_a_pre_authorized_active_user(): void
     {
-        $response = $this->get(route('login.secureivs.callback'));
+        $user = $this->user();
+        $state = $this->beginLogin();
+        $this->fakeValidation($this->profile($state));
 
-        $response->assertStatus(200);
-        $response->assertSee('Login with Shop Secure IVS');
-    }
-
-    public function test_callback_with_valid_token_logs_in_existing_user(): void
-    {
-        $existing = User::create([
-            'name' => 'Theepan',
-            'email' => 'theepan@digifront.biz',
-            'password' => bcrypt('secret123'),
-            'is_admin' => true,
-            'is_active' => true,
-        ]);
-
-        Http::fake([
-            'https://api.secureivs.eu/api/v2/auth/token/validate' => Http::response([
-                'success' => true,
-                'code' => 'SUCCESS',
-                'data' => [
-                    'user' => [
-                        'email' => 'theepan@digifront.biz',
-                        'name' => 'Theepan Digifront',
-                    ],
-                ],
-            ], 200),
-        ]);
-
-        $response = $this->get(route('login.secureivs.callback', ['token' => 'sample_valid_token']));
+        $response = $this->get(route('login.secureivs.callback', ['token' => 'valid-token']));
 
         $response->assertRedirect(route('order-delivery.index'));
-        $this->assertAuthenticatedAs($existing);
+        $this->assertAuthenticatedAs($user);
+        $this->assertSame('valid-token', session('secureivs.token'));
+        $this->assertNotNull($user->fresh()->last_login_at);
     }
 
-    public function test_callback_with_valid_token_auto_creates_and_logs_in_new_user(): void
+    public function test_verified_but_unlisted_user_is_denied_and_not_created(): void
     {
-        Http::fake([
-            'https://api.secureivs.eu/api/v2/auth/token/validate' => Http::response([
-                'success' => true,
-                'code' => 'SUCCESS',
-                'data' => [
-                    'user' => [
-                        'email' => 'newuser@example.com',
-                        'name' => 'New User',
-                    ],
-                ],
-            ], 200),
-        ]);
+        $state = $this->beginLogin();
+        $this->fakeValidation($this->profile($state, 'unknown@example.com'));
 
-        $response = $this->get(route('login.secureivs.callback', ['token' => 'token_for_new_user']));
+        $response = $this->get(route('login.secureivs.callback', ['token' => 'valid-token']));
 
-        $response->assertRedirect(route('order-delivery.index'));
-        $this->assertAuthenticated();
-
-        $newUser = User::where('email', 'newuser@example.com')->first();
-        $this->assertNotNull($newUser);
-        $this->assertSame('New User', $newUser->name);
-        $this->assertTrue($newUser->is_active);
+        $response->assertRedirect(route('login'))->assertSessionHasErrors('email');
+        $this->assertGuest();
+        $this->assertDatabaseMissing('users', ['email' => 'unknown@example.com']);
     }
 
-    public function test_callback_with_inactive_user_blocks_login(): void
+    public function test_inactive_pre_authorized_user_is_denied(): void
     {
-        User::create([
-            'name' => 'Disabled User',
-            'email' => 'disabled@example.com',
-            'password' => bcrypt('secret123'),
-            'is_admin' => false,
-            'is_active' => false,
-        ]);
+        $this->user(['is_active' => false]);
+        $state = $this->beginLogin();
+        $this->fakeValidation($this->profile($state));
 
-        Http::fake([
-            'https://api.secureivs.eu/api/v2/auth/token/validate' => Http::response([
-                'success' => true,
-                'code' => 'SUCCESS',
-                'data' => [
-                    'user' => [
-                        'email' => 'disabled@example.com',
-                    ],
-                ],
-            ], 200),
-        ]);
+        $this->get(route('login.secureivs.callback', ['token' => 'valid-token']))
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
 
-        $response = $this->get(route('login.secureivs.callback', ['token' => 'token_disabled']));
-
-        $response->assertRedirect(route('login'));
-        $response->assertSessionHasErrors('email');
         $this->assertGuest();
     }
 
-    public function test_callback_with_invalid_token_shows_error(): void
+    public function test_callback_rejects_a_mismatched_login_state(): void
     {
+        $this->user();
+        $this->beginLogin();
+        $this->fakeValidation($this->profile('different-state'));
+
+        $this->get(route('login.secureivs.callback', ['token' => 'valid-token']))
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
+
+        $this->assertGuest();
+    }
+
+    public function test_callback_rejects_an_inactive_secure_ivs_subscription(): void
+    {
+        $this->user();
+        $state = $this->beginLogin();
+        $profile = $this->profile($state);
+        $profile['subscription_status'] = 'I';
+        $this->fakeValidation($profile);
+
+        $this->get(route('login.secureivs.callback', ['token' => 'valid-token']))
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
+
+        $this->assertGuest();
+    }
+
+    public function test_invalid_token_and_missing_token_are_rejected(): void
+    {
+        $this->beginLogin();
         Http::fake([
-            'https://api.secureivs.eu/api/v2/auth/token/validate' => Http::response([
+            self::VALIDATE_URL => Http::response([
                 'success' => false,
                 'code' => 'TOKEN_EXPIRED',
                 'message' => 'The token has expired.',
+                'requestId' => 'request-1',
             ], 401),
         ]);
 
-        $response = $this->get(route('login.secureivs.callback', ['token' => 'expired_token']));
+        $this->get(route('login.secureivs.callback', ['token' => 'expired']))
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
 
-        $response->assertRedirect(route('login'));
-        $response->assertSessionHasErrors('email');
+        $this->get(route('login.secureivs.callback'))
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
+    }
+
+    public function test_logout_revokes_secure_ivs_token_and_destroys_local_session(): void
+    {
+        $user = $this->user();
+        Http::fake([
+            'https://api.secureivs.eu/api/v2/auth/token/logout' => Http::response(['success' => true], 200),
+        ]);
+
+        $this->actingAs($user)->withSession(['secureivs.token' => 'valid-token'])
+            ->post(route('logout'))
+            ->assertRedirect(route('login'));
+
         $this->assertGuest();
+        Http::assertSent(fn ($request) => $request->url() === 'https://api.secureivs.eu/api/v2/auth/token/logout'
+            && $request['token'] === 'valid-token');
+    }
+
+    private function beginLogin(): string
+    {
+        $this->get(route('login.secureivs'))->assertRedirect();
+
+        return (string) session('secureivs.login_state');
+    }
+
+    /** @return array<string, string> */
+    private function profile(string $state, string $email = 'theepan@digifront.biz'): array
+    {
+        return [
+            'email' => $email,
+            'name' => 'Verified User',
+            'subscription_status' => 'A',
+            'return_code' => base64_encode((string) json_encode(['state' => $state])),
+        ];
+    }
+
+    /** @param array<string, string> $profile */
+    private function fakeValidation(array $profile): void
+    {
+        Http::fake([
+            self::VALIDATE_URL => Http::response([
+                'success' => true,
+                'code' => 'SUCCESS',
+                'requestId' => 'request-1',
+                'data' => ['user' => $profile],
+            ], 200),
+        ]);
+    }
+
+    private function user(array $overrides = []): User
+    {
+        return User::create(array_merge([
+            'name' => 'Theepan',
+            'email' => 'theepan@digifront.biz',
+            'password' => bcrypt('unused-password'),
+            'is_admin' => true,
+            'is_active' => true,
+        ], $overrides));
     }
 }

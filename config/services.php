@@ -32,11 +32,11 @@ return [
     ],
 
     'secureivs' => [
-        'client_id' => env('SECUREIVS_CLIENT_ID', '9b3tvZGZStRrcTsfTZifsjgkaUTER3aOKaXjshkO'),
-        'api_key' => env('SECUREIVS_API_KEY', 'GFUEGLzTzF6UHByZ1'),
+        'client_id' => env('SECUREIVS_CLIENT_ID'),
+        'api_key' => env('SECUREIVS_API_KEY'),
         'auth_url' => env('SECUREIVS_AUTH_URL', 'https://customer-api.secureivs.eu'),
-        'api_url' => env('SECUREIVS_API_URL', 'https://api.secureivs.eu/api/v2'),
-        'redirect_uri' => env('SECUREIVS_REDIRECT_URI', 'https://shop.fabconcept.no/login/secureivs/callback'),
+        'base_url' => env('SECUREIVS_BASE_URL', env('SECUREIVS_API_URL', 'https://api.secureivs.eu')),
+        'redirect_uri' => env('SECUREIVS_REDIRECT_URI'),
     ],
 
 ];

@@ -26,10 +26,9 @@ use App\Http\Controllers\UserAccessController;
 // Authentication Routes
 Route::redirect('/', '/Dashboard');
 Route::get('/login', [AuthLoginController::class, 'showLoginForm'])->name('login');
-Route::post('/login', [AuthLoginController::class, 'login'])->middleware('throttle:5,1');
 Route::post('/logout', [AuthLoginController::class, 'logout'])->middleware('auth')->name('logout');
-Route::get('/login/secureivs', [AuthLoginController::class, 'redirectToSecureIvs'])->name('login.secureivs');
-Route::get('/login/secureivs/callback', [AuthLoginController::class, 'handleSecureIvsCallback'])->name('login.secureivs.callback');
+Route::get('/login/secureivs', [AuthLoginController::class, 'redirectToSecureIvs'])->middleware('throttle:10,1')->name('login.secureivs');
+Route::get('/login/secureivs/callback', [AuthLoginController::class, 'handleSecureIvsCallback'])->middleware('throttle:10,1')->name('login.secureivs.callback');
 
 // Payroll / Timesheet Routes
 Route::get('/timesheet', [TimesheetController::class, 'index'])->name('timesheet.index');
@@ -106,7 +105,7 @@ Route::post('/update-crm-id', [ReportController::class, 'updateCrmId']);
 Route::post('/get-latest-crm-id', [ReportController::class, 'getLatestCrmId']);
 
 // Order Delivery Routes
-Route::prefix('order-delivery')->group(function () {
+Route::prefix('order-delivery')->middleware(['auth', 'service:orders'])->group(function () {
     Route::get('/', [OrderDeliveryController::class, 'index'])->name('order-delivery.index');
     Route::get('/mobile-global', [OrderDeliveryController::class, 'mobileGlobal'])->name('order-delivery.mobile-global');
     Route::get('/global-latest-scan', [OrderDeliveryController::class, 'globalLatestScan'])->name('order-delivery.global-latest-scan');

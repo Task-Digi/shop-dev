@@ -6,6 +6,7 @@ use App\Models\Service;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class UserAccessController extends Controller
@@ -20,17 +21,19 @@ class UserAccessController extends Controller
 
     public function store(Request $request)
     {
+        $request->merge(['email' => Str::lower(trim((string) $request->input('email')))]);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
             'orders_enabled' => ['nullable', 'boolean'],
         ]);
 
         $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
-            'password' => Hash::make($data['password']),
+            // Secure IVS is the only interactive login method; this satisfies
+            // the legacy non-null password column and is never shown to users.
+            'password' => Hash::make(Str::random(64)),
             'is_admin' => false,
             'is_active' => true,
         ]);
@@ -42,10 +45,10 @@ class UserAccessController extends Controller
 
     public function update(Request $request, User $user)
     {
+        $request->merge(['email' => Str::lower(trim((string) $request->input('email')))]);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'is_active' => ['nullable', 'boolean'],
             'orders_enabled' => ['nullable', 'boolean'],
         ]);
@@ -56,13 +59,9 @@ class UserAccessController extends Controller
             'is_active' => $user->is_admin ? true : $request->boolean('is_active'),
         ]);
 
-        if (!empty($data['password'])) {
-            $user->password = Hash::make($data['password']);
-        }
-
         $user->save();
 
-        if (!$user->is_admin) {
+        if (! $user->is_admin) {
             $this->syncOrdersAccess($user, $request->boolean('orders_enabled'));
         }
 
