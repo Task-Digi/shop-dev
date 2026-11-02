@@ -190,7 +190,7 @@ class SecureIvsLoginTest extends TestCase
 
         $this->actingAs($user)->withSession(['secureivs.token' => 'valid-token'])
             ->post(route('logout'))
-            ->assertRedirect(route('login'));
+            ->assertRedirect(route('saleitems.create_raw'));
 
         $this->assertGuest();
         Http::assertSent(fn ($request) => $request->url() === 'https://identity-api.secureivs.eu/api/v2/auth/token/logout'

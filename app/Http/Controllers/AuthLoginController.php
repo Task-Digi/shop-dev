@@ -137,6 +137,6 @@ class AuthLoginController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('login');
+        return redirect()->route('saleitems.create_raw');
     }
 }
