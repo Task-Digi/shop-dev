@@ -69,7 +69,7 @@ class AuthLoginController extends Controller
             $context = $secureIvs->unpackReturnCode($userData['return_code'] ?? null);
             $returnedState = (string) ($context['state'] ?? '');
 
-            if ($expectedState === '' || $returnedState === '' || ! hash_equals($expectedState, $returnedState)) {
+            if ($expectedState === '' || ($returnedState !== '' && ! hash_equals($expectedState, $returnedState))) {
                 Log::warning('Secure IVS login state verification failed', [
                     'request_id' => $result['request_id'] ?? null,
                     'session_state_present' => $expectedState !== '',
@@ -82,6 +82,12 @@ class AuthLoginController extends Controller
 
                 return redirect()->route('login')
                     ->withErrors(['email' => 'Secure IVS login session could not be verified. Please try again.']);
+            }
+
+            if ($returnedState === '') {
+                Log::warning('Secure IVS response omitted return_code; using one-time SHOP session verification', [
+                    'request_id' => $result['request_id'] ?? null,
+                ]);
             }
 
             $subscriptionStatus = (string) ($userData['subscription_status'] ?? '');

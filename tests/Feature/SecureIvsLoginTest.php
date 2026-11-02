@@ -102,6 +102,49 @@ class SecureIvsLoginTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_callback_accepts_a_valid_token_without_return_code_when_shop_session_exists(): void
+    {
+        $user = $this->user();
+        $this->beginLogin();
+        $profile = $this->profile('unused');
+        unset($profile['return_code']);
+        $this->fakeValidation($profile);
+
+        $this->get(route('login.secureivs.callback', ['token' => 'valid-token']))
+            ->assertRedirect(route('order-delivery.index'));
+
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_callback_without_return_code_still_requires_an_initiated_shop_session(): void
+    {
+        $this->user();
+        $profile = $this->profile('unused');
+        unset($profile['return_code']);
+        $this->fakeValidation($profile);
+
+        $this->get(route('login.secureivs.callback', ['token' => 'valid-token']))
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
+
+        $this->assertGuest();
+    }
+
+    public function test_callback_rejects_a_token_for_a_different_secure_ivs_client(): void
+    {
+        $this->user();
+        $state = $this->beginLogin();
+        $profile = $this->profile($state);
+        $profile['client_id'] = 'another-client';
+        $this->fakeValidation($profile);
+
+        $this->get(route('login.secureivs.callback', ['token' => 'valid-token']))
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors('email');
+
+        $this->assertGuest();
+    }
+
     public function test_callback_rejects_an_inactive_secure_ivs_subscription(): void
     {
         $this->user();
@@ -167,6 +210,7 @@ class SecureIvsLoginTest extends TestCase
         return [
             'email' => $email,
             'name' => 'Verified User',
+            'client_id' => 'test-client-id',
             'subscription_status' => 'A',
             'return_code' => base64_encode((string) json_encode(['state' => $state])),
         ];

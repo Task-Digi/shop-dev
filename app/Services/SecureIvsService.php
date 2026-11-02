@@ -67,6 +67,23 @@ class SecureIvsService
 
         $user = $payload['data']['user'] ?? null;
 
+        if (is_array($user)) {
+            $tokenClientId = trim((string) ($user['client_id'] ?? ''));
+
+            if ($tokenClientId !== '' && ! hash_equals($this->clientId, $tokenClientId)) {
+                Log::warning('Secure IVS token belongs to a different client', [
+                    'request_id' => $requestId,
+                ]);
+
+                return [
+                    'valid' => false,
+                    'user' => null,
+                    'request_id' => $requestId,
+                    'message' => 'Secure IVS token is not valid for this SHOP client.',
+                ];
+            }
+        }
+
         return [
             'valid' => is_array($user),
             'user' => is_array($user) ? $user : null,
