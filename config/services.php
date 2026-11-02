@@ -39,4 +39,8 @@ return [
         'redirect_uri' => env('SECUREIVS_REDIRECT_URI'),
     ],
 
+    'sms_solution' => [
+        'url' => env('SMS_SOLUTION_URL', 'https://sms.digifront.biz'),
+    ],
+
 ];

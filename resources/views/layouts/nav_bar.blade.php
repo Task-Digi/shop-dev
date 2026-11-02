@@ -37,6 +37,9 @@
         @if(\Illuminate\Support\Facades\Route::has('timesheet.index'))
             <a href="{{ route('timesheet.index') }}" class="btn {{ request()->routeIs('timesheet.index') ? 'btn-secondary' : 'btn-primary' }}">Payroll</a>
         @endif
+        @auth
+            <a href="{{ config('services.sms_solution.url') }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">SMS Solution</a>
+        @endauth
         @if(auth()->user()?->is_admin)
             <a href="{{ route('admin.users.index') }}" class="btn {{ request()->routeIs('admin.users.*') ? 'btn-secondary' : 'btn-primary' }}">Users</a>
         @endif
@@ -58,6 +61,9 @@
     @if(\Illuminate\Support\Facades\Route::has('timesheet.index'))
         <a href="{{ route('timesheet.index') }}" class="btn {{ request()->routeIs('timesheet.index') ? 'btn-secondary' : 'btn-outline-primary' }}">Payroll</a>
     @endif
+    @auth
+        <a href="{{ config('services.sms_solution.url') }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary">SMS Solution</a>
+    @endauth
     @if(auth()->user()?->is_admin)
         <a href="{{ route('admin.users.index') }}" class="btn {{ request()->routeIs('admin.users.*') ? 'btn-secondary' : 'btn-outline-primary' }}">Users</a>
     @endif
