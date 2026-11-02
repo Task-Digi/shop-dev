@@ -1,73 +1,191 @@
 <style>
-    .app-nav .btn {
-        margin: 4px;
+    .shop-nav-shell {
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+        padding: 12px;
     }
 
-    @media (max-width: 767.98px) {
-        .app-nav-mobile {
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            background: #fff;
-            padding: 10px;
-            margin-bottom: 12px;
-        }
+    .shop-nav-scroll,
+    .shop-nav-account {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+    }
 
-        .app-nav-mobile .btn {
-            width: 100%;
-            margin: 0 0 8px 0;
-            text-align: left;
-        }
+    .shop-nav-scroll {
+        overflow-x: auto;
+        scrollbar-width: thin;
+        white-space: nowrap;
+    }
 
-        .app-nav-mobile .btn:last-child {
-            margin-bottom: 0;
+    .shop-nav-account {
+        margin-left: auto;
+        padding-left: 10px;
+        border-left: 1px solid #e2e8f0;
+    }
+
+    .shop-nav-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 38px;
+        padding: 8px 12px;
+        border: 1px solid #dbe5f1;
+        border-radius: 9px;
+        background: #f8fafc;
+        color: #334155;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1;
+        text-decoration: none !important;
+        transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
+    }
+
+    .shop-nav-link:hover {
+        border-color: #93c5fd;
+        background: #eff6ff;
+        color: #1d4ed8;
+        transform: translateY(-1px);
+    }
+
+    .shop-nav-link.is-active {
+        border-color: #2563eb;
+        background: #2563eb;
+        color: #fff;
+        box-shadow: 0 3px 8px rgba(37, 99, 235, 0.22);
+    }
+
+    .shop-nav-link.sms-link {
+        border-color: #bfdbfe;
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+
+    .shop-nav-link.sms-link.is-active {
+        border-color: #2563eb;
+        background: #2563eb;
+        color: #fff;
+    }
+
+    .shop-nav-link.logout-link {
+        border-color: #fecaca;
+        background: #fff;
+        color: #dc2626;
+        cursor: pointer;
+    }
+
+    .shop-nav-link.logout-link:hover {
+        border-color: #ef4444;
+        background: #fef2f2;
+        color: #b91c1c;
+    }
+
+    .shop-nav-mobile {
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+        padding: 12px;
+        margin-bottom: 12px;
+    }
+
+    .shop-nav-mobile-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .shop-nav-mobile .shop-nav-link,
+    .shop-nav-mobile form,
+    .shop-nav-mobile form .shop-nav-link {
+        width: 100%;
+    }
+
+    .shop-nav-mobile-account {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    @media (max-width: 420px) {
+        .shop-nav-mobile-grid,
+        .shop-nav-mobile-account {
+            grid-template-columns: 1fr;
         }
     }
 </style>
 
-<!-- Desktop/Tablet View -->
-<div class="card d-none d-md-block mb-3 app-nav">
-    <div class="card-body d-flex flex-wrap align-items-center">
-        <a href="/93WwgVzcc9shQaxnd34c" class="btn {{ request()->is('93WwgVzcc9shQaxnd34c') ? 'btn-secondary' : 'btn-primary' }}">Data Entry</a>
-        <a href="{{ route('saleitems.view') }}" class="btn {{ request()->routeIs('saleitems.view') ? 'btn-secondary' : 'btn-primary' }}">SoldRegistry</a>
-        <a href="{{ route('report') }}" class="btn {{ request()->routeIs('report') ? 'btn-secondary' : 'btn-primary' }}">Daily Sales</a>
-        <a href="/report/all" class="btn {{ request()->is('report/all') ? 'btn-secondary' : 'btn-primary' }}">Customers</a>
-        <a href="/report/all/product" class="btn {{ request()->is('report/all/product') ? 'btn-secondary' : 'btn-primary' }}">Products</a>
-        <a href="{{ route('ict') }}" class="btn {{ request()->routeIs('ict') ? 'btn-secondary' : 'btn-primary' }}">Farrow & Ball</a>
-        <a href="{{ route('order-delivery.index') }}" class="btn {{ request()->routeIs('order-delivery.*') ? 'btn-secondary' : 'btn-primary' }}">Order Delivery</a>
-        @if(\Illuminate\Support\Facades\Route::has('timesheet.index'))
-            <a href="{{ route('timesheet.index') }}" class="btn {{ request()->routeIs('timesheet.index') ? 'btn-secondary' : 'btn-primary' }}">Payroll</a>
-        @endif
+@php
+    $navItems = [
+        ['label' => 'Data Entry', 'url' => url('/93WwgVzcc9shQaxnd34c'), 'active' => request()->is('93WwgVzcc9shQaxnd34c')],
+        ['label' => 'Sold Registry', 'url' => route('saleitems.view'), 'active' => request()->routeIs('saleitems.view')],
+        ['label' => 'Daily Sales', 'url' => route('report'), 'active' => request()->routeIs('report')],
+        ['label' => 'Customers', 'url' => url('/report/all'), 'active' => request()->is('report/all')],
+        ['label' => 'Products', 'url' => url('/report/all/product'), 'active' => request()->is('report/all/product')],
+        ['label' => 'Farrow & Ball', 'url' => route('ict'), 'active' => request()->routeIs('ict')],
+        ['label' => 'Order Delivery', 'url' => route('order-delivery.index'), 'active' => request()->routeIs('order-delivery.*')],
+    ];
+
+    if (\Illuminate\Support\Facades\Route::has('timesheet.index')) {
+        $navItems[] = ['label' => 'Payroll', 'url' => route('timesheet.index'), 'active' => request()->routeIs('timesheet.index')];
+    }
+@endphp
+
+<nav class="shop-nav-shell d-none d-md-block mb-3" aria-label="SHOP navigation">
+    <div class="shop-nav-scroll">
+        @foreach($navItems as $item)
+            <a href="{{ $item['url'] }}" class="shop-nav-link {{ $item['active'] ? 'is-active' : '' }}">
+                {{ $item['label'] }}
+            </a>
+        @endforeach
+
         @auth
-            <a href="{{ route('sms.index') }}" class="btn {{ request()->routeIs('sms.*') ? 'btn-secondary' : 'btn-primary' }}">SMS Solution</a>
-        @endauth
-        @if(auth()->user()?->is_admin)
-            <a href="{{ route('admin.users.index') }}" class="btn {{ request()->routeIs('admin.users.*') ? 'btn-secondary' : 'btn-primary' }}">Users</a>
-        @endif
-        @auth
-            <form method="POST" action="{{ route('logout') }}" class="d-inline">@csrf<button type="submit" class="btn btn-outline-danger">Logout</button></form>
+            <a href="{{ route('sms.index') }}" class="shop-nav-link sms-link {{ request()->routeIs('sms.*') ? 'is-active' : '' }}">
+                SMS Solution
+            </a>
+
+            <div class="shop-nav-account">
+                @if(auth()->user()?->is_admin)
+                    <a href="{{ route('admin.users.index') }}" class="shop-nav-link {{ request()->routeIs('admin.users.*') ? 'is-active' : '' }}">Users</a>
+                @endif
+                <form method="POST" action="{{ route('logout') }}" class="m-0">
+                    @csrf
+                    <button type="submit" class="shop-nav-link logout-link">Logout</button>
+                </form>
+            </div>
         @endauth
     </div>
-</div>
+</nav>
 
-<!-- Mobile View -->
-<div class="d-md-none app-nav-mobile">
-    <a href="/93WwgVzcc9shQaxnd34c" class="btn {{ request()->is('93WwgVzcc9shQaxnd34c') ? 'btn-secondary' : 'btn-outline-primary' }}">Data Entry</a>
-    <a href="{{ route('saleitems.view') }}" class="btn {{ request()->routeIs('saleitems.view') ? 'btn-secondary' : 'btn-outline-primary' }}">SoldRegistry</a>
-    <a href="{{ route('report') }}" class="btn {{ request()->routeIs('report') ? 'btn-secondary' : 'btn-outline-primary' }}">Daily Sales</a>
-    <a href="/report/all" class="btn {{ request()->is('report/all') ? 'btn-secondary' : 'btn-outline-primary' }}">Customers</a>
-    <a href="/report/all/product" class="btn {{ request()->is('report/all/product') ? 'btn-secondary' : 'btn-outline-primary' }}">Products</a>
-    <a href="{{ route('ict') }}" class="btn {{ request()->routeIs('ict') ? 'btn-secondary' : 'btn-outline-primary' }}">Farrow & Ball</a>
-    <a href="{{ route('order-delivery.index') }}" class="btn {{ request()->routeIs('order-delivery.*') ? 'btn-secondary' : 'btn-outline-primary' }}">Order Delivery</a>
-    @if(\Illuminate\Support\Facades\Route::has('timesheet.index'))
-        <a href="{{ route('timesheet.index') }}" class="btn {{ request()->routeIs('timesheet.index') ? 'btn-secondary' : 'btn-outline-primary' }}">Payroll</a>
-    @endif
+<nav class="shop-nav-mobile d-md-none" aria-label="SHOP mobile navigation">
+    <div class="shop-nav-mobile-grid">
+        @foreach($navItems as $item)
+            <a href="{{ $item['url'] }}" class="shop-nav-link {{ $item['active'] ? 'is-active' : '' }}">
+                {{ $item['label'] }}
+            </a>
+        @endforeach
+
+        @auth
+            <a href="{{ route('sms.index') }}" class="shop-nav-link sms-link {{ request()->routeIs('sms.*') ? 'is-active' : '' }}">
+                SMS Solution
+            </a>
+        @endauth
+    </div>
+
     @auth
-        <a href="{{ route('sms.index') }}" class="btn {{ request()->routeIs('sms.*') ? 'btn-secondary' : 'btn-outline-primary' }}">SMS Solution</a>
+        <div class="shop-nav-mobile-account">
+            @if(auth()->user()?->is_admin)
+                <a href="{{ route('admin.users.index') }}" class="shop-nav-link {{ request()->routeIs('admin.users.*') ? 'is-active' : '' }}">Users</a>
+            @endif
+            <form method="POST" action="{{ route('logout') }}" class="m-0">
+                @csrf
+                <button type="submit" class="shop-nav-link logout-link">Logout</button>
+            </form>
+        </div>
     @endauth
-    @if(auth()->user()?->is_admin)
-        <a href="{{ route('admin.users.index') }}" class="btn {{ request()->routeIs('admin.users.*') ? 'btn-secondary' : 'btn-outline-primary' }}">Users</a>
-    @endif
-    @auth
-        <form method="POST" action="{{ route('logout') }}">@csrf<button type="submit" class="btn btn-outline-danger">Logout</button></form>
-    @endauth
-</div>
+</nav>
