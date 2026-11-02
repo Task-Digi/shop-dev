@@ -1,16 +1,17 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\HomeController;
-use App\Http\Controllers\SaleItemController;
-use App\Http\Controllers\ReportController;
-use App\Http\Controllers\CustomerController;
-use App\Http\Controllers\ProductController;
 use App\Http\Controllers\AuthLoginController;
-use App\Http\Controllers\OrderDeliveryController;
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MasterDataController;
+use App\Http\Controllers\OrderDeliveryController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SaleItemController;
+use App\Http\Controllers\SmsController;
 use App\Http\Controllers\TimesheetController;
 use App\Http\Controllers\UserAccessController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -29,6 +30,11 @@ Route::get('/login', [AuthLoginController::class, 'showLoginForm'])->name('login
 Route::post('/logout', [AuthLoginController::class, 'logout'])->middleware('auth')->name('logout');
 Route::get('/login/secureivs', [AuthLoginController::class, 'redirectToSecureIvs'])->middleware('throttle:10,1')->name('login.secureivs');
 Route::get('/login/secureivs/callback', [AuthLoginController::class, 'handleSecureIvsCallback'])->middleware('throttle:10,1')->name('login.secureivs.callback');
+
+Route::middleware('auth')->prefix('sms')->name('sms.')->group(function () {
+    Route::get('/', [SmsController::class, 'index'])->name('index');
+    Route::post('/', [SmsController::class, 'send'])->middleware('throttle:10,1')->name('send');
+});
 
 // Payroll / Timesheet Routes
 Route::get('/timesheet', [TimesheetController::class, 'index'])->name('timesheet.index');

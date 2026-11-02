@@ -39,8 +39,11 @@ return [
         'redirect_uri' => env('SECUREIVS_REDIRECT_URI'),
     ],
 
-    'sms_solution' => [
-        'url' => env('SMS_SOLUTION_URL', 'https://sms.digifront.biz'),
+    'sms_gateway' => [
+        'client_id' => env('SMS_GATEWAY_CLIENT_ID'),
+        'api_key' => env('SMS_GATEWAY_API_KEY'),
+        'endpoint' => env('SMS_GATEWAY_ENDPOINT', 'https://smsgateway.digifront.biz/smsgateway.php'),
+        'sender' => env('SMS_GATEWAY_SENDER', 'Fabconcept'),
     ],
 
 ];
