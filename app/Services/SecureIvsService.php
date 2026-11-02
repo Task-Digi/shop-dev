@@ -34,6 +34,7 @@ class SecureIvsService
             'client_id' => $this->clientId,
             'login_method' => 'email',
             'redirect_uri' => $redirectUri,
+            'callback_uri' => $redirectUri,
             'return_code' => $returnCode,
         ]);
     }

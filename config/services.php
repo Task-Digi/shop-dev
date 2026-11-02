@@ -34,8 +34,8 @@ return [
     'secureivs' => [
         'client_id' => env('SECUREIVS_CLIENT_ID'),
         'api_key' => env('SECUREIVS_API_KEY'),
-        'auth_url' => env('SECUREIVS_AUTH_URL', 'https://customer-api.secureivs.eu'),
-        'base_url' => env('SECUREIVS_BASE_URL', env('SECUREIVS_API_URL', 'https://api.secureivs.eu')),
+        'auth_url' => env('SECUREIVS_AUTH_URL', 'https://identity.secureivs.eu'),
+        'base_url' => env('SECUREIVS_BASE_URL', env('SECUREIVS_API_URL', 'https://identity-api.secureivs.eu')),
         'redirect_uri' => env('SECUREIVS_REDIRECT_URI'),
     ],
 
