@@ -111,7 +111,11 @@ Route::post('/update-crm-id', [ReportController::class, 'updateCrmId']);
 Route::post('/get-latest-crm-id', [ReportController::class, 'getLatestCrmId']);
 
 // Order Delivery Routes
-Route::prefix('order-delivery')->middleware(['auth', 'service:orders'])->group(function () {
+$orderDeliveryMiddleware = config('shop.enforce_order_access')
+    ? ['auth', 'service:orders']
+    : [];
+
+Route::prefix('order-delivery')->middleware($orderDeliveryMiddleware)->group(function () {
     Route::get('/', [OrderDeliveryController::class, 'index'])->name('order-delivery.index');
     Route::get('/mobile-global', [OrderDeliveryController::class, 'mobileGlobal'])->name('order-delivery.mobile-global');
     Route::get('/global-latest-scan', [OrderDeliveryController::class, 'globalLatestScan'])->name('order-delivery.global-latest-scan');
