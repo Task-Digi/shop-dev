@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\SecureIvsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class AuthLoginController extends Controller
@@ -69,6 +70,16 @@ class AuthLoginController extends Controller
             $returnedState = (string) ($context['state'] ?? '');
 
             if ($expectedState === '' || $returnedState === '' || ! hash_equals($expectedState, $returnedState)) {
+                Log::warning('Secure IVS login state verification failed', [
+                    'request_id' => $result['request_id'] ?? null,
+                    'session_state_present' => $expectedState !== '',
+                    'return_code_present' => ! empty($userData['return_code']),
+                    'returned_state_present' => $returnedState !== '',
+                    'state_matches' => $expectedState !== ''
+                        && $returnedState !== ''
+                        && hash_equals($expectedState, $returnedState),
+                ]);
+
                 return redirect()->route('login')
                     ->withErrors(['email' => 'Secure IVS login session could not be verified. Please try again.']);
             }
