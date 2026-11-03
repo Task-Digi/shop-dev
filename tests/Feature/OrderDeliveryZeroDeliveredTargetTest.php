@@ -258,28 +258,14 @@ class OrderDeliveryZeroDeliveredTargetTest extends TestCase
         $this->assertDatabaseHas('order_scans', ['id' => $first->id, 'units' => 2, 'deactivated' => false]);
         $this->assertDatabaseHas('order_scans', ['id' => $duplicate->id, 'deactivated' => true]);
 
-        $incompleteResponse = $controller->updateUnitsToMatchOrder(Request::create('/order-delivery/match-order', 'POST', [
+        $okFromUnderResponse = $controller->updateUnitsToMatchOrder(Request::create('/order-delivery/match-order', 'POST', [
             'scan_id' => $first->id,
         ]));
-        $incompleteData = $incompleteResponse->getData(true);
+        $okFromUnderData = $okFromUnderResponse->getData(true);
 
-        $this->assertFalse($incompleteData['success']);
-        $this->assertSame(422, $incompleteResponse->getStatusCode());
-        $this->assertSame(2, $incompleteData['scanned']);
-
-        $controller->updateUnits(Request::create('/order-delivery/update-units', 'POST', [
-            'scan_id' => $first->id,
-            'change' => 1,
-        ]));
-
-        $okResponse = $controller->updateUnitsToMatchOrder(Request::create('/order-delivery/match-order', 'POST', [
-            'scan_id' => $first->id,
-        ]));
-        $okData = $okResponse->getData(true);
-
-        $this->assertTrue($okData['success']);
-        $this->assertSame(3, $okData['units']);
-        $this->assertSame(3, $okData['scanned']);
+        $this->assertTrue($okFromUnderData['success']);
+        $this->assertSame(3, $okFromUnderData['units']);
+        $this->assertSame(3, $okFromUnderData['scanned']);
 
         $scanResponse = $controller->scan(Request::create('/order-delivery/scan', 'POST', [
             'order_id' => $orderId,
@@ -290,5 +276,55 @@ class OrderDeliveryZeroDeliveredTargetTest extends TestCase
         $this->assertSame($first->id, $scanData['scan_id']);
         $this->assertSame(4, $scanData['units']);
         $this->assertSame(1, OrderScan::where('order_id', $orderId)->where('deactivated', false)->count());
+
+        $okFromOverResponse = $controller->updateUnitsToMatchOrder(Request::create('/order-delivery/match-order', 'POST', [
+            'scan_id' => $first->id,
+        ]));
+        $okFromOverData = $okFromOverResponse->getData(true);
+
+        $this->assertTrue($okFromOverData['success']);
+        $this->assertSame(3, $okFromOverData['units']);
+        $this->assertSame(3, $okFromOverData['scanned']);
+    }
+
+    public function test_ok_sets_scanned_to_ordered_regardless_of_delivered_and_previous_scans(): void
+    {
+        config(['broadcasting.default' => 'null']);
+
+        $orderId = 'OK-USES-ORDERED';
+        OrderRecord::create(['order_id' => $orderId, 'status' => 'Started']);
+        Product::create([
+            'product_id' => 'SKU-OK',
+            'ean_code' => '7099999999999',
+            'product_name' => 'OK Product',
+        ]);
+        OrderItem::create([
+            'order_id' => $orderId,
+            'sku' => 'SKU-OK',
+            'item_name' => 'OK Product',
+            'ordered_quantity' => 5,
+            'quantity' => 5,
+            'delivered' => 2,
+        ]);
+        $scan = OrderScan::create([
+            'order_id' => $orderId,
+            'ean_code' => '7099999999999',
+            'units' => 1,
+            'deactivated' => false,
+        ]);
+
+        $response = app(OrderDeliveryController::class)->updateUnitsToMatchOrder(
+            Request::create('/order-delivery/match-order', 'POST', ['scan_id' => $scan->id])
+        );
+        $data = $response->getData(true);
+
+        $this->assertTrue($data['success']);
+        $this->assertSame(5, $data['units']);
+        $this->assertSame(5, $data['scanned']);
+        $this->assertDatabaseHas('order_scans', [
+            'id' => $scan->id,
+            'units' => 5,
+            'deactivated' => false,
+        ]);
     }
 }

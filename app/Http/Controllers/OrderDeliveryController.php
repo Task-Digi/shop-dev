@@ -749,37 +749,20 @@ class OrderDeliveryController extends Controller
             return response()->json(['success' => false, 'message' => 'Order item not found']);
         }
 
-        // Target quantity is LEVERT (delivered). If missing/zero in source file, fallback to ordered quantity.
-        $totalDeliveredTarget = (int)$orderItemsForSku->sum(function ($row) {
-            return (int)($row->delivered ?? 0);
-        });
+        // #OK always resets the scanned quantity to the ordered quantity,
+        // regardless of how many units were previously scanned.
         $totalOrderedTarget = (int)$orderItemsForSku->sum(function ($row) {
             return (int)($row->quantity ?? 0);
         });
-        $totalTarget = $totalDeliveredTarget > 0 ? $totalDeliveredTarget : $totalOrderedTarget;
 
-        $currentScanned = (int) OrderScan::where('order_id', $orderId)
-            ->where('deactivated', false)
-            ->whereIn('ean_code', $identityCodes->all())
-            ->sum('units');
-
-        if ($currentScanned !== $totalTarget) {
-            return response()->json([
-                'success' => false,
-                'message' => "Scan all delivered units first. Scanned: {$currentScanned} / Delivered: {$totalTarget}.",
-                'scanned' => $currentScanned,
-                'delivery_target' => $totalTarget,
-            ], 422);
-        }
-
-        // The count is already correct. Consolidate legacy duplicate rows and
-        // confirm the product without changing the verified scanned quantity.
-        [$scan, $removedScanIds] = $this->consolidateProductScans($scan, $totalTarget);
+        // Store the ordered total in one active scan row and retire any legacy
+        // duplicate rows representing the same product.
+        [$scan, $removedScanIds] = $this->consolidateProductScans($scan, $totalOrderedTarget);
 
         $state = $this->getProductState($orderId, $scan->ean_code);
 
         // Broadcast Update
-        Log::info("Broadcasting match order for scan: {$scan->id}, new total units matched to delivery target (LEVERT).");
+        Log::info("Broadcasting #OK for scan: {$scan->id}, scanned units set to ordered quantity.");
         try {
             broadcast(new ScanBroadcast($orderId, array_merge($state, [
                 'update_units' => true,
