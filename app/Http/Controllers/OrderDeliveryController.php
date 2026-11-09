@@ -572,14 +572,9 @@ class OrderDeliveryController extends Controller
         ]);
 
         $scan = OrderScan::findOrFail($request->scan_id);
-        $identityCodes = $this->productIdentityCodes($scan->ean_code);
-        $currentTotal = (int) OrderScan::where('order_id', $scan->order_id)
-            ->where('deactivated', false)
-            ->whereIn('ean_code', $identityCodes)
-            ->sum('units');
-        [$scan, $removedScanIds] = $this->consolidateProductScans(
+        [$scan, $removedScanIds] = $this->adjustProductScans(
             $scan,
-            max(0, $currentTotal + (int) $request->change)
+            (int) $request->change
         );
 
         $state = $this->getProductState($scan->order_id, $scan->ean_code);
@@ -843,6 +838,45 @@ class OrderDeliveryController extends Controller
 
             $lockedScan->deactivated = false;
             $lockedScan->units = max(0, $totalUnits);
+            $lockedScan->save();
+
+            return [$lockedScan, $removedScanIds];
+        });
+    }
+
+    /**
+     * Atomically apply a relative quantity change across every active scan row
+     * for the product. This prevents simultaneous phone/desktop requests from
+     * reading the same old total and overwriting one another.
+     *
+     * @return array{0: OrderScan, 1: array<int>}
+     */
+    private function adjustProductScans(OrderScan $scan, int $change): array
+    {
+        return DB::transaction(function () use ($scan, $change) {
+            $lockedScan = OrderScan::whereKey($scan->id)->lockForUpdate()->firstOrFail();
+            $identityCodes = $this->productIdentityCodes($lockedScan->ean_code);
+
+            $activeScans = OrderScan::where('order_id', $lockedScan->order_id)
+                ->where('deactivated', false)
+                ->whereIn('ean_code', $identityCodes)
+                ->lockForUpdate()
+                ->get();
+
+            $currentTotal = (int) $activeScans->sum('units');
+            $removedScanIds = $activeScans
+                ->where('id', '!=', $lockedScan->id)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+
+            if ($removedScanIds) {
+                OrderScan::whereIn('id', $removedScanIds)->update(['deactivated' => true]);
+            }
+
+            $lockedScan->deactivated = false;
+            $lockedScan->units = max(0, $currentTotal + $change);
             $lockedScan->save();
 
             return [$lockedScan, $removedScanIds];
