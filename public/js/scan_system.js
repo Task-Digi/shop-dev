@@ -149,7 +149,11 @@
     }
 
     function isMobileTouchDevice() {
-        return window.matchMedia('(pointer: coarse)').matches || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        // Older Android WebViews and embedded/legacy browsers may not expose
+        // matchMedia. Quantity actions must still reach the API in those clients.
+        const hasCoarsePointer = typeof window.matchMedia === 'function' &&
+            window.matchMedia('(pointer: coarse)').matches;
+        return hasCoarsePointer || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
     }
 
     function isReportLocked() {
@@ -534,7 +538,61 @@
     };
 
     let pendingChanges = {};
-    let debounceTimers = {};
+    let updateRequestsInFlight = {};
+
+    function sendPendingUnitChanges(scanId) {
+        if (updateRequestsInFlight[scanId]) return;
+
+        const change = pendingChanges[scanId] || 0;
+        if (change === 0) {
+            setSyncStatus('active');
+            return;
+        }
+
+        pendingChanges[scanId] = 0;
+        updateRequestsInFlight[scanId] = true;
+        let requestFailed = false;
+        setSyncStatus('syncing');
+
+        fetch(window.ScanConfig.routes.update, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': window.ScanConfig.csrfToken
+            },
+            body: JSON.stringify({
+                scan_id: scanId,
+                change: change
+            })
+        })
+            .then(res => {
+                if (!res.ok) throw new Error('Quantity update failed with HTTP ' + res.status);
+                return res.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    updateUIRow(data);
+                } else {
+                    throw new Error(data.message || 'Quantity update was rejected');
+                }
+            })
+            .catch(err => {
+                // Do not silently lose taps. Restore this batch and let the user
+                // retry after the server/network becomes available.
+                pendingChanges[scanId] = (pendingChanges[scanId] || 0) + change;
+                requestFailed = true;
+                console.error('Update units error:', err);
+                setSyncStatus('error');
+            })
+            .finally(() => {
+                updateRequestsInFlight[scanId] = false;
+                if (!requestFailed && pendingChanges[scanId]) {
+                    sendPendingUnitChanges(scanId);
+                } else if (!requestFailed) {
+                    setSyncStatus('active');
+                }
+            });
+    }
 
     window.updateUnits = function (scanId, change) {
         if (isReportLocked()) {
@@ -610,40 +668,9 @@
         }
         pendingChanges[scanId] += change;
 
-        setSyncStatus('syncing');
-
-        const aggregatedChange = pendingChanges[scanId];
-        pendingChanges[scanId] = 0; // reset
-
-        if (aggregatedChange === 0) {
-            setSyncStatus('active');
-            return;
-        }
-
-        fetch(window.ScanConfig.routes.update, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': window.ScanConfig.csrfToken
-            },
-            body: JSON.stringify({
-                scan_id: scanId,
-                change: aggregatedChange
-            })
-        })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    updateUIRow(data); // Final sync with server truth
-                } else if (data.message) {
-                    Swal.fire('Error', data.message, 'error');
-                }
-            })
-            .catch(err => {
-                console.error('Update units error:', err);
-                setSyncStatus('error');
-            })
-            .finally(() => setSyncStatus('active'));
+        // Serialize requests for each scan. Mobile users commonly tap rapidly;
+        // parallel read/modify/write requests can otherwise overwrite each other.
+        sendPendingUnitChanges(scanId);
     };
 
     window.updateUnitsExact = function (scanId, val) {
